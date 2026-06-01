@@ -15,3 +15,15 @@ function updateSidebar() {
   if (roleEl)
     roleEl.textContent = user.role === "admin" ? "Администратор" : "Наставник";
 }
+
+// В highlightNav() или отдельной функции
+function setupSmartBoardLink() {
+  const lastBoardId = localStorage.getItem("imctech_last_board_id");
+  const boardLink = document.querySelector(
+    '.nav-item a[href="dashboard.html"]',
+  ); // или найди по тексту "Доска"
+
+  if (boardLink && lastBoardId) {
+    boardLink.href = `mainboard.html?boardId=${lastBoardId}`;
+  }
+}
