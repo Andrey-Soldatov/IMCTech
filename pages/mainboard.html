@@ -80,124 +80,19 @@
         </header>
 
         <!-- Доска (скроллится вся вместе) -->
+        <!-- Доска -->
         <main class="board-container">
           <div class="board-columns">
             <!-- Колонка 1: Не начато -->
             <div class="column">
               <div class="column-header">
                 <span class="column-dot dot-todo"></span>
-                <h3>Не начато</h3>
-                <span class="column-count">4</span>
+                <h3 class="column-title">Не начато</h3>
+                <!-- Добавлен класс -->
+                <span class="column-count" id="count-todo">0</span>
               </div>
               <div class="column-body">
-                <div class="task-card">
-                  <div class="task-tags">
-                    <span class="task-tag">Frontend</span
-                    ><span class="task-tag">UX</span>
-                  </div>
-                  <div class="task-title">Создать форму регистрации</div>
-                  <div class="task-meta">
-                    <span class="priority high">↑ Высокий</span>
-                    <span class="due-date">🕒 18 янв</span>
-                  </div>
-                  <div class="task-footer">
-                    <div class="task-footer-left">
-                      <div class="task-avatars">
-                        <div
-                          class="avatar"
-                          style="background: #6366f1; color: white"
-                        >
-                          И
-                        </div>
-                      </div>
-                      <div class="task-icons">
-                        <span class="task-icon-item">💬 3</span>
-                      </div>
-                    </div>
-                    <span class="task-menu">•••</span>
-                  </div>
-                </div>
-
-                <div class="task-card">
-                  <div class="task-tags">
-                    <span class="task-tag">Docs</span>
-                  </div>
-                  <div class="task-title">Написать документацию API</div>
-                  <div class="task-meta">
-                    <span class="priority med">− Средний</span>
-                    <span class="due-date">🕒 12 янв</span>
-                  </div>
-                  <div class="task-footer">
-                    <div class="task-footer-left">
-                      <div class="task-avatars">
-                        <div
-                          class="avatar"
-                          style="background: #14b8a6; color: white"
-                        >
-                          Д
-                        </div>
-                      </div>
-                      <div class="task-icons">
-                        <span class="task-icon-item">📎 1</span>
-                      </div>
-                    </div>
-                    <span class="task-menu">•••</span>
-                  </div>
-                </div>
-
-                <div class="task-card">
-                  <div class="task-tags">
-                    <span class="task-tag">DevOps</span>
-                  </div>
-                  <div class="task-title">Настроить CI/CD пайплайн</div>
-                  <div class="task-meta">
-                    <span class="priority low">↓ Низкий</span>
-                    <span class="due-date">🕒 30 янв</span>
-                  </div>
-                  <div class="task-footer">
-                    <div class="task-footer-left">
-                      <div class="task-icons">
-                        <span class="task-icon-item">💬 0</span>
-                      </div>
-                    </div>
-                    <span class="task-menu">•••</span>
-                  </div>
-                </div>
-
-                <div class="task-card">
-                  <div class="task-tags">
-                    <span class="task-tag">Design</span
-                    ><span class="task-tag">Review</span>
-                  </div>
-                  <div class="task-title">Ревью дизайна главной страницы</div>
-                  <div class="task-meta">
-                    <span class="priority med">− Средний</span>
-                    <span class="due-date">🕒 20 янв</span>
-                  </div>
-                  <div class="task-footer">
-                    <div class="task-footer-left">
-                      <div class="task-avatars">
-                        <div
-                          class="avatar"
-                          style="background: #ec4899; color: white"
-                        >
-                          М
-                        </div>
-                        <div
-                          class="avatar"
-                          style="background: #f59e0b; color: white"
-                        >
-                          А
-                        </div>
-                      </div>
-                      <div class="task-icons">
-                        <span class="task-icon-item">📎 5</span>
-                      </div>
-                    </div>
-                    <span class="task-menu">•••</span>
-                  </div>
-                </div>
-
+                <!-- Карточки удалили, скрипт их нарисует сам -->
                 <button class="add-task-btn">+ Добавить задачу</button>
               </div>
             </div>
@@ -206,102 +101,11 @@
             <div class="column">
               <div class="column-header">
                 <span class="column-dot dot-progress"></span>
-                <h3>В работе</h3>
-                <span class="column-count">3</span>
+                <h3 class="column-title">В работе</h3>
+                <!-- Добавлен класс -->
+                <span class="column-count" id="count-progress">0</span>
               </div>
               <div class="column-body">
-                <div class="task-card">
-                  <div class="task-tags">
-                    <span class="task-tag">Backend</span
-                    ><span class="task-tag">Security</span>
-                  </div>
-                  <div class="task-title">
-                    Разработать систему аутентификации
-                  </div>
-                  <div class="task-meta">
-                    <span class="priority high">↑ Высокий</span>
-                    <span class="due-date">🕒 14 янв</span>
-                  </div>
-                  <div class="task-footer">
-                    <div class="task-footer-left">
-                      <div class="task-avatars">
-                        <div
-                          class="avatar"
-                          style="background: #3b82f6; color: white"
-                        >
-                          К
-                        </div>
-                      </div>
-                      <div class="task-icons">
-                        <span class="task-icon-item">💬 7</span>
-                      </div>
-                    </div>
-                    <span class="task-menu">•••</span>
-                  </div>
-                </div>
-
-                <div class="task-card">
-                  <div class="task-tags">
-                    <span class="task-tag">Backend</span
-                    ><span class="task-tag">API</span>
-                  </div>
-                  <div class="task-title">Интеграция платёжной системы</div>
-                  <div class="task-meta">
-                    <span class="priority high">↑ Высокий</span>
-                    <span class="due-date">🕒 16 янв</span>
-                  </div>
-                  <div class="task-footer">
-                    <div class="task-footer-left">
-                      <div class="task-avatars">
-                        <div
-                          class="avatar"
-                          style="background: #8b5cf6; color: white"
-                        >
-                          О
-                        </div>
-                        <div
-                          class="avatar"
-                          style="background: #10b981; color: white"
-                        >
-                          С
-                        </div>
-                      </div>
-                      <div class="task-icons">
-                        <span class="task-icon-item">💬 4</span>
-                      </div>
-                    </div>
-                    <span class="task-menu">•••</span>
-                  </div>
-                </div>
-
-                <div class="task-card">
-                  <div class="task-tags">
-                    <span class="task-tag">DB</span
-                    ><span class="task-tag">Performance</span>
-                  </div>
-                  <div class="task-title">Оптимизация базы данных</div>
-                  <div class="task-meta">
-                    <span class="priority med">− Средний</span>
-                    <span class="due-date">🕒 19 янв</span>
-                  </div>
-                  <div class="task-footer">
-                    <div class="task-footer-left">
-                      <div class="task-avatars">
-                        <div
-                          class="avatar"
-                          style="background: #64748b; color: white"
-                        >
-                          В
-                        </div>
-                      </div>
-                      <div class="task-icons">
-                        <span class="task-icon-item">💬 2</span>
-                      </div>
-                    </div>
-                    <span class="task-menu">•••</span>
-                  </div>
-                </div>
-
                 <button class="add-task-btn">+ Добавить задачу</button>
               </div>
             </div>
@@ -310,92 +114,11 @@
             <div class="column">
               <div class="column-header">
                 <span class="column-dot dot-done"></span>
-                <h3>Готово</h3>
-                <span class="column-count">3</span>
+                <h3 class="column-title">Готово</h3>
+                <!-- Добавлен класс -->
+                <span class="column-count" id="count-done">0</span>
               </div>
               <div class="column-body">
-                <div class="task-card">
-                  <div class="task-tags">
-                    <span class="task-tag">Setup</span>
-                  </div>
-                  <div class="task-title">Настройка проекта и репозитория</div>
-                  <div class="task-meta">
-                    <span class="priority low">↓ Низкий</span>
-                    <span class="due-date">🕒 5 янв</span>
-                  </div>
-                  <div class="task-footer">
-                    <div class="task-footer-left">
-                      <div class="task-avatars">
-                        <div
-                          class="avatar"
-                          style="background: #ef4444; color: white"
-                        >
-                          Р
-                        </div>
-                      </div>
-                      <div class="task-icons">
-                        <span class="task-icon-item">💬 1</span>
-                      </div>
-                    </div>
-                    <span class="task-menu">•••</span>
-                  </div>
-                </div>
-
-                <div class="task-card">
-                  <div class="task-tags">
-                    <span class="task-tag">Design</span
-                    ><span class="task-tag">UI</span>
-                  </div>
-                  <div class="task-title">Дизайн-система компонентов</div>
-                  <div class="task-meta">
-                    <span class="priority med">− Средний</span>
-                    <span class="due-date">🕒 8 янв</span>
-                  </div>
-                  <div class="task-footer">
-                    <div class="task-footer-left">
-                      <div class="task-avatars">
-                        <div
-                          class="avatar"
-                          style="background: #a855f7; color: white"
-                        >
-                          Л
-                        </div>
-                      </div>
-                      <div class="task-icons">
-                        <span class="task-icon-item"> 6</span>
-                      </div>
-                    </div>
-                    <span class="task-menu">•••</span>
-                  </div>
-                </div>
-
-                <div class="task-card">
-                  <div class="task-tags">
-                    <span class="task-tag">Architecture</span>
-                  </div>
-                  <div class="task-title">Базовая архитектура приложения</div>
-                  <div class="task-meta">
-                    <span class="priority med">− Средний</span>
-                    <span class="due-date">🕒 10 янв</span>
-                  </div>
-                  <div class="task-footer">
-                    <div class="task-footer-left">
-                      <div class="task-avatars">
-                        <div
-                          class="avatar"
-                          style="background: #0ea5e9; color: white"
-                        >
-                          Н
-                        </div>
-                      </div>
-                      <div class="task-icons">
-                        <span class="task-icon-item">💬 3</span>
-                      </div>
-                    </div>
-                    <span class="task-menu">•••</span>
-                  </div>
-                </div>
-
                 <button class="add-task-btn">+ Добавить задачу</button>
               </div>
             </div>
@@ -405,5 +128,6 @@
     </div>
 
     <script type="module" src="../js/app.js"></script>
+    <script type="module" src="../js/pages/mainboard.js"></script>
   </body>
 </html>
