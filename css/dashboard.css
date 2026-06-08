@@ -442,3 +442,33 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Кнопка выхода в сайдбаре */
+#logout-btn {
+  margin-top: 0.75rem;
+  width: 100%;
+  padding: 0.55rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all var(--transition);
+}
+
+#logout-btn:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+#logout-btn svg {
+  stroke: currentColor;
+  flex-shrink: 0;
+}

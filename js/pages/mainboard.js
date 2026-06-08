@@ -1,39 +1,47 @@
 import { storage } from "../utils/storage.js";
 
+let currentBoardId = null;
+
 document.addEventListener("DOMContentLoaded", () => {
   // 1. Получаем ID доски из URL
   const urlParams = new URLSearchParams(window.location.search);
-  const boardId = Number(urlParams.get("boardId"));
+  currentBoardId = Number(urlParams.get("boardId"));
 
-  if (!boardId) {
+  if (!currentBoardId) {
     window.location.href = "dashboard.html";
     return;
   }
 
-  const board = storage.getBoards().find((b) => b.id === boardId);
+  const board = storage.getBoards().find((b) => b.id === currentBoardId);
   if (!board) {
     window.location.href = "dashboard.html";
     return;
   }
+
+  // Сохраняем ID последней открытой доски
+  localStorage.setItem("imctech_last_board_id", currentBoardId);
 
   // Обновляем заголовок
   const titleEl = document.querySelector(".breadcrumbs .current");
   if (titleEl && board) titleEl.textContent = board.name;
 
   // 2. Загружаем и рендерим задачи
-  renderTasks(boardId);
+  renderTasks(currentBoardId);
 
   // 3. Настраиваем drag-and-drop
-  setupDragAndDrop(boardId);
+  setupDragAndDrop(currentBoardId);
 
   // 4. Обработчики кнопок "Добавить задачу"
   document.querySelectorAll(".add-task-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const column = btn.closest(".column");
       const status = getStatusFromColumn(column);
-      openTaskModal(null, boardId, status);
+      openTaskModal(null, currentBoardId, status);
     });
   });
+
+  // 5. Настраиваем модальное окно
+  setupModalHandlers();
 });
 
 // ===== РЕНДЕРИНГ =====
@@ -69,21 +77,24 @@ function createTaskCard(task) {
   card.dataset.taskId = task.id;
 
   card.innerHTML = `
-        <div class="task-tags">
-            ${task.tags ? task.tags.map((tag) => `<span class="task-tag">${tag}</span>`).join("") : ""}
-        </div>
-        <div class="task-title">${task.title}</div>
-        <div class="task-meta">
-            <span class="priority ${task.priority}">${getPriorityText(task.priority)}</span>
-            <span class="due-date">🕒 ${task.dueDate || "—"}</span>
-        </div>
-        <div class="task-footer">
-            <div class="task-footer-left">
-                ${task.assignee ? `<div class="avatar" style="background:#6366f1;color:white">${task.assignee[0]}</div>` : ""}
-            </div>
-            <span class="task-menu" data-action="delete">🗑</span>
-        </div>
-    `;
+    <div class="task-tags">
+      ${task.tags ? task.tags.map((tag) => `<span class="task-tag">${tag}</span>`).join("") : ""}
+    </div>
+    <div class="task-title">${task.title}</div>
+    <div class="task-meta">
+      <span class="priority ${task.priority}">${getPriorityText(task.priority)}</span>
+      <span class="due-date">🕒 ${task.dueDate || "—"}</span>
+    </div>
+    <div class="task-footer">
+      <div class="task-footer-left">
+        ${task.assignee ? `<div class="avatar" style="background:#6366f1;color:white">${task.assignee[0]}</div>` : ""}
+      </div>
+      <div class="task-actions">
+        <span class="task-menu" data-action="edit" title="Редактировать">✏️</span>
+        <span class="task-menu" data-action="delete" title="Удалить">🗑</span>
+      </div>
+    </div>
+  `;
 
   // Клик по карточке → открытие результата
   card.addEventListener("click", (e) => {
@@ -92,17 +103,21 @@ function createTaskCard(task) {
     }
   });
 
+  // Редактирование задачи
+  card.querySelector('[data-action="edit"]')?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openTaskModal(task, currentBoardId, task.status);
+  });
+
   // Удаление задачи
   card
     .querySelector('[data-action="delete"]')
     ?.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (confirm("Удалить задачу?")) {
-        deleteTask(task.id);
-      }
+      deleteTask(task.id);
     });
 
-  // ===== DRAG EVENTS =====
+  // Drag events
   card.addEventListener("dragstart", (e) => {
     e.dataTransfer.setData("text/plain", task.id);
     e.dataTransfer.effectAllowed = "move";
@@ -178,51 +193,132 @@ function moveTask(taskId, newStatus, boardId) {
   if (task && task.status !== newStatus) {
     task.status = newStatus;
     storage.saveTasks(tasks);
-    renderTasks(boardId); // Перерисовываем доску
+    renderTasks(boardId);
   }
 }
 
 function deleteTask(taskId) {
   const tasks = storage.getTasks().filter((t) => t.id !== taskId);
   storage.saveTasks(tasks);
-
-  // Перерисовываем текущую доску
-  const urlParams = new URLSearchParams(window.location.search);
-  const boardId = Number(urlParams.get("boardId"));
-  if (boardId) renderTasks(boardId);
+  renderTasks(currentBoardId);
 }
 
-function openTaskModal(task, boardId, status) {
-  // Простая реализация через prompt (можно заменить на модальное окно)
-  const title = prompt("Название задачи:", task?.title || "");
-  if (!title) return;
+// ===== МОДАЛЬНОЕ ОКНО =====
+function openTaskModal(task = null, boardId = null, status = "todo") {
+  const modal = document.getElementById("taskModal");
+  const title = document.getElementById("modalTitle");
+  const saveBtn = document.querySelector(".btn-save");
+  const form = document.getElementById("taskForm");
 
-  const priority = prompt("Приоритет (high/med/low):", task?.priority || "med");
-  const dueDate = prompt("Дедлайн (например, 20 янв):", task?.dueDate || "");
-
-  const tasks = storage.getTasks();
+  // Сброс формы
+  form.reset();
+  document.getElementById("editingTaskId").value = "";
 
   if (task) {
     // Редактирование
-    const idx = tasks.findIndex((t) => t.id === task.id);
-    if (idx !== -1) {
-      tasks[idx] = { ...tasks[idx], title, priority, dueDate };
-    }
+    title.textContent = "Редактировать задачу";
+    saveBtn.textContent = "Сохранить";
+    document.getElementById("editingTaskId").value = task.id;
+    document.getElementById("taskTitle").value = task.title || "";
+    document.getElementById("taskDescription").value = task.description || "";
+    document.getElementById("taskStatus").value = task.status || "todo";
+    document.getElementById("taskPriority").value = task.priority || "med";
+    document.getElementById("taskDueDate").value = task.dueDate || "";
+    document.getElementById("taskTags").value = task.tags
+      ? task.tags.join(", ")
+      : "";
   } else {
     // Создание
-    tasks.push({
-      id: Date.now(),
-      boardId,
-      title,
-      status: status || "todo",
-      priority: priority || "med",
-      dueDate: dueDate || "",
-      createdAt: new Date().toISOString(),
-    });
+    title.textContent = "Новая задача";
+    saveBtn.textContent = "Создать задачу";
+    document.getElementById("taskStatus").value = status;
   }
 
-  storage.saveTasks(tasks);
-  renderTasks(boardId);
+  modal.classList.add("active");
+  document.getElementById("taskTitle").focus();
+}
+
+function closeTaskModal() {
+  document.getElementById("taskModal").classList.remove("active");
+}
+
+function setupModalHandlers() {
+  // Закрытие по кнопкам
+  document
+    .getElementById("modalClose")
+    ?.addEventListener("click", closeTaskModal);
+  document
+    .getElementById("modalCancel")
+    ?.addEventListener("click", closeTaskModal);
+
+  // Закрытие по клику на overlay
+  document.getElementById("taskModal")?.addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) {
+      closeTaskModal();
+    }
+  });
+
+  // Закрытие по Escape
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      const modal = document.getElementById("taskModal");
+      if (modal && modal.classList.contains("active")) {
+        closeTaskModal();
+      }
+    }
+  });
+
+  // Обработка формы
+  document.getElementById("taskForm")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    const editingId = document.getElementById("editingTaskId").value;
+    const title = document.getElementById("taskTitle").value.trim();
+
+    if (!title) {
+      document.getElementById("taskTitle").focus();
+      return;
+    }
+
+    const tagsStr = document.getElementById("taskTags").value.trim();
+    const tags = tagsStr
+      ? tagsStr
+          .split(",")
+          .map((t) => t.trim())
+          .filter((t) => t)
+      : [];
+
+    const taskData = {
+      title,
+      description: document.getElementById("taskDescription").value.trim(),
+      status: document.getElementById("taskStatus").value,
+      priority: document.getElementById("taskPriority").value,
+      dueDate: document.getElementById("taskDueDate").value.trim(),
+      tags,
+    };
+
+    const tasks = storage.getTasks();
+
+    if (editingId) {
+      // Редактирование
+      const idx = tasks.findIndex((t) => t.id === Number(editingId));
+      if (idx !== -1) {
+        tasks[idx] = { ...tasks[idx], ...taskData };
+      }
+    } else {
+      // Создание
+      tasks.push({
+        id: Date.now(),
+        boardId: currentBoardId,
+        ...taskData,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    storage.saveTasks(tasks);
+    closeTaskModal();
+    renderTasks(currentBoardId);
+  });
 }
 
 function updateCounters(boardId) {
