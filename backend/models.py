@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
@@ -14,3 +14,45 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     boards = relationship("Board", back_populates="owner")
+
+class Board(Base):
+    __tablename__ = "boards"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Связи
+    owner = relationship("User", back_populates="boards")
+    tasks = relationship("Task", back_populates="board", cascade="all, delete-orphan")
+    members = relationship("BoardMember", back_populates="board", cascade="all, delete-orphan")
+
+class Task(Base):
+    __tablename__ = "tasks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String, default="todo") # todo, in-progress, done
+    priority = Column(String, default="med") # low, med, high
+    board_id = Column(Integer, ForeignKey("boards.id"), nullable=False)
+    assignee_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    due_date = Column(DateTime, nullable=True)
+    
+    # Связи
+    board = relationship("Board", back_populates="tasks")
+    assignee = relationship("User")
+
+class BoardMember(Base):
+    __tablename__ = "board_members"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    board_id = Column(Integer, ForeignKey("boards.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    role = Column(String, default="student") # student, mentor, admin
+    
+    # Связи
+    board = relationship("Board", back_populates="members")
+    user = relationship("User")
