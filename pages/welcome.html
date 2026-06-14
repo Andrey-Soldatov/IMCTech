@@ -10,7 +10,6 @@
     <main class="welcome-wrapper">
       <div class="welcome-header">
         <div class="header-icon">
-          <!-- Иконка канбан-доски -->
           <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <rect x="4" y="4" width="4" height="16" rx="1" />
             <rect x="10" y="4" width="4" height="10" rx="1" />
@@ -24,18 +23,14 @@
         </p>
       </div>
 
-      <form
-        class="create-card"
-        onsubmit="
-          event.preventDefault();
-          alert('Доска создана!');
-        "
-      >
+      <!-- 🔥 УБРАЛИ onsubmit! -->
+      <form class="create-card" id="create-board-form">
         <div class="form-group">
           <label class="form-label" for="board-name">Название доски</label>
           <input
             type="text"
             id="board-name"
+            name="name"
             class="form-input"
             placeholder="Например: IMCTech Kanban"
             required
@@ -46,6 +41,7 @@
           <label class="form-label" for="board-desc">Описание</label>
           <textarea
             id="board-desc"
+            name="description"
             class="form-textarea"
             placeholder="Краткое описание проекта..."
           ></textarea>
@@ -81,6 +77,5 @@
 
     <script type="module" src="../js/app.js"></script>
     <script type="module" src="../js/pages/welcome.js"></script>
-</body>
   </body>
 </html>
