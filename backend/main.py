@@ -7,11 +7,11 @@ from models import User, Board, Task, BoardMember
 from schemas import (
     UserCreate, UserResponse, UserLogin, Token,
     BoardCreate, BoardResponse,
-    TaskCreate, TaskUpdate, TaskResponse
+    TaskCreate, TaskUpdate, TaskResponse,
+    BoardMemberCreate, BoardMemberResponse, BoardMemberUpdate
 )
 from auth import get_password_hash, verify_password, create_access_token, get_current_user
 
-# Создаём таблицы
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="IMCTech API")
@@ -75,6 +75,16 @@ def create_board(board: BoardCreate, current_user: User = Depends(get_current_us
     db.add(new_board)
     db.commit()
     db.refresh(new_board)
+    
+    # 🔥 Автоматически добавляем владельца как участника с ролью "admin"
+    owner_member = BoardMember(
+        board_id=new_board.id,
+        user_id=current_user.id,
+        role="admin"
+    )
+    db.add(owner_member)
+    db.commit()
+    
     return new_board
 
 @app.get("/api/boards", response_model=list[BoardResponse])
@@ -156,3 +166,118 @@ def delete_task(task_id: int, current_user: User = Depends(get_current_user), db
     db.delete(task)
     db.commit()
     return {"message": "Задача удалена"}
+
+# ===== BOARD MEMBER ENDPOINTS =====
+@app.get("/api/boards/{board_id}/members", response_model=list[BoardMemberResponse])
+def get_board_members(board_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Получить список участников доски"""
+    board = db.query(Board).filter(Board.id == board_id).first()
+    if not board:
+        raise HTTPException(status_code=404, detail="Доска не найдена")
+    
+    is_owner = board.owner_id == current_user.id
+    is_member = db.query(BoardMember).filter(
+        BoardMember.board_id == board_id,
+        BoardMember.user_id == current_user.id
+    ).first()
+    
+    if not is_owner and not is_member:
+        raise HTTPException(status_code=403, detail="Нет доступа к доске")
+    
+    members = db.query(BoardMember).filter(BoardMember.board_id == board_id).all()
+    return members
+
+@app.post("/api/boards/{board_id}/members", response_model=BoardMemberResponse)
+def add_board_member(board_id: int, member: BoardMemberCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Добавить участника в доску"""
+    board = db.query(Board).filter(Board.id == board_id).first()
+    if not board:
+        raise HTTPException(status_code=404, detail="Доска не найдена")
+    
+    if board.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Только владелец доски может добавлять участников")
+    
+    user = db.query(User).filter(User.id == member.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    
+    existing = db.query(BoardMember).filter(
+        BoardMember.board_id == board_id,
+        BoardMember.user_id == member.user_id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Пользователь уже является участником")
+    
+    new_member = BoardMember(
+        board_id=board_id,
+        user_id=member.user_id,
+        role=member.role
+    )
+    db.add(new_member)
+    db.commit()
+    db.refresh(new_member)
+    
+    return new_member
+
+@app.put("/api/boards/{board_id}/members/{user_id}", response_model=BoardMemberResponse)
+def update_board_member(board_id: int, user_id: int, member_update: BoardMemberUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Обновить роль участника"""
+    board = db.query(Board).filter(Board.id == board_id).first()
+    if not board:
+        raise HTTPException(status_code=404, detail="Доска не найдена")
+    
+    if board.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Только владелец доски может менять роли")
+    
+    member = db.query(BoardMember).filter(
+        BoardMember.board_id == board_id,
+        BoardMember.user_id == user_id
+    ).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Участник не найден")
+    
+    if member_update.role is not None:
+        member.role = member_update.role
+    
+    db.commit()
+    db.refresh(member)
+    
+    return member
+
+@app.delete("/api/boards/{board_id}/members/{user_id}")
+def remove_board_member(board_id: int, user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Удалить участника из доски"""
+    board = db.query(Board).filter(Board.id == board_id).first()
+    if not board:
+        raise HTTPException(status_code=404, detail="Доска не найдена")
+    
+    if board.owner_id != current_user.id and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Нет прав для удаления участника")
+    
+    member = db.query(BoardMember).filter(
+        BoardMember.board_id == board_id,
+        BoardMember.user_id == user_id
+    ).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Участник не найден")
+    
+    if member.user_id == board.owner_id:
+        raise HTTPException(status_code=403, detail="Нельзя удалить владельца доски")
+    
+    db.delete(member)
+    db.commit()
+    
+    return {"message": "Участник удалён"}
+
+@app.get("/api/users/search")
+def search_users(email: str = None, name: str = None, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Поиск пользователей по email или имени"""
+    query = db.query(User)
+    
+    if email:
+        query = query.filter(User.email.contains(email))
+    if name:
+        query = query.filter(User.name.contains(name))
+    
+    users = query.limit(10).all()
+    return [{"id": u.id, "name": u.name, "email": u.email} for u in users]

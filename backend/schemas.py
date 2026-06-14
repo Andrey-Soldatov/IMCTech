@@ -39,6 +39,23 @@ class BoardResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# ===== BOARD MEMBERS =====
+class BoardMemberCreate(BaseModel):
+    user_id: int
+    role: str = "student"
+
+class BoardMemberResponse(BaseModel):
+    id: int
+    board_id: int
+    user_id: int
+    role: str
+    
+    class Config:
+        from_attributes = True
+
+class BoardMemberUpdate(BaseModel):
+    role: Optional[str] = None
+
 # ===== TASKS =====
 class TaskCreate(BaseModel):
     title: str
@@ -47,7 +64,7 @@ class TaskCreate(BaseModel):
     priority: str = "med"
     board_id: int
     assignee_id: Optional[int] = None
-    due_date: Optional[datetime] = None
+    due_date: Optional[str] = None  # 🔥 str вместо datetime
 
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
@@ -55,7 +72,7 @@ class TaskUpdate(BaseModel):
     status: Optional[str] = None
     priority: Optional[str] = None
     assignee_id: Optional[int] = None
-    due_date: Optional[datetime] = None
+    due_date: Optional[str] = None  # 🔥 str
 
 class TaskResponse(BaseModel):
     id: int
@@ -65,6 +82,7 @@ class TaskResponse(BaseModel):
     priority: str
     board_id: int
     assignee_id: Optional[int] = None
+    due_date: Optional[str] = None  #  Добавляем due_date
     
     class Config:
         from_attributes = True

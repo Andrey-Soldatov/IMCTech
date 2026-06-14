@@ -24,7 +24,6 @@ class Board(Base):
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Связи
     owner = relationship("User", back_populates="boards")
     tasks = relationship("Task", back_populates="board", cascade="all, delete-orphan")
     members = relationship("BoardMember", back_populates="board", cascade="all, delete-orphan")
@@ -35,13 +34,12 @@ class Task(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
-    status = Column(String, default="todo") # todo, in-progress, done
-    priority = Column(String, default="med") # low, med, high
+    status = Column(String, default="todo")
+    priority = Column(String, default="med")
     board_id = Column(Integer, ForeignKey("boards.id"), nullable=False)
     assignee_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    due_date = Column(DateTime, nullable=True)
+    due_date = Column(String, nullable=True)  #  БЫЛО DateTime, СТАЛО String
     
-    # Связи
     board = relationship("Board", back_populates="tasks")
     assignee = relationship("User")
 
@@ -51,8 +49,7 @@ class BoardMember(Base):
     id = Column(Integer, primary_key=True, index=True)
     board_id = Column(Integer, ForeignKey("boards.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    role = Column(String, default="student") # student, mentor, admin
+    role = Column(String, default="student")
     
-    # Связи
     board = relationship("Board", back_populates="members")
     user = relationship("User")
