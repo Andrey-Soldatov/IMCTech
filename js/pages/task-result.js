@@ -1,10 +1,19 @@
 import { storage } from "../utils/storage.js";
 
+const API_URL = "http://localhost:3000";
 let currentTask = null;
 let currentBoardId = null;
+let currentUserRole = "student"; // student или mentor
+let currentUserStatus = "participant"; // participant или admin
 
-document.addEventListener("DOMContentLoaded", () => {
-  // 1. Получаем taskId из URL
+console.log("👤 Текущая роль:", currentUserRole);
+console.log("📊 Текущий статус:", currentUserStatus);
+
+function getToken() {
+  return localStorage.getItem("imctech_token");
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
   const urlParams = new URLSearchParams(window.location.search);
   const taskId = Number(urlParams.get("taskId"));
 
@@ -13,10 +22,9 @@ document.addEventListener("DOMContentLoaded", () => {
     return;
   }
 
-  // 2. Загружаем задачу
+  // 1. Загружаем задачу из localStorage
   const tasks = storage.getTasks();
   currentTask = tasks.find((t) => t.id === taskId);
-
   if (!currentTask) {
     alert("Задача не найдена");
     window.location.href = "dashboard.html";
@@ -25,10 +33,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   currentBoardId = currentTask.boardId;
 
-  // 3. Заполняем форму
-  fillForm();
+  // 2. Определяем роль пользователя через API
+  await detectUserRole();
 
-  // 4. Рендерим блоки
+  // 3. Рендерим все блоки
+  fillForm();
   renderStudentFiles();
   renderMentorComment();
   renderMentorFiles();
@@ -36,11 +45,95 @@ document.addEventListener("DOMContentLoaded", () => {
   renderActivity();
   renderDetails();
 
-  // 5. Настраиваем обработчики
+  // 4. Настраиваем обработчики
   setupFormHandlers();
   setupCheckButtons();
   setupNavigation();
+
+  // 5. Применяем ролевую логику (скрываем/показываем блоки)
+  applyRoleBasedUI();
 });
+
+// ===== ОПРЕДЕЛЕНИЕ РОЛИ =====
+async function detectUserRole() {
+  if (!currentBoardId) return;
+  try {
+    const res = await fetch(`${API_URL}/api/boards/${currentBoardId}/members`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    if (!res.ok) return;
+
+    const members = await res.json();
+    const currentUser = storage.getCurrentUser();
+    const member = members.find((m) => m.user_id === currentUser?.id);
+
+    if (member) {
+      currentUserRole = member.role || "student";
+      currentUserStatus = member.status || "participant";
+    }
+  } catch (error) {
+    console.warn(
+      "Не удалось определить роль, используем student по умолчанию:",
+      error,
+    );
+  }
+}
+
+// ===== РОЛЕВАЯ ЛОГИКА UI =====
+function applyRoleBasedUI() {
+  console.log("🎭 Применяю UI для роли:", currentUserRole);
+
+  const isMentor = currentUserRole === "mentor";
+
+  // Поля редактирования (для студента)
+  const studentFields = [
+    "taskTitle",
+    "taskStatus",
+    "taskDescription",
+    "submitBtn",
+    "attachFileBtn",
+  ];
+
+  // Поля наставника
+  const mentorFields = ["mentorComment", "checkSection"];
+
+  if (isMentor) {
+    // Наставник: скрываем поля студента
+    studentFields.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.display = "none";
+        console.log("🚫 Скрыл:", id);
+      }
+    });
+
+    // Показываем поля наставника
+    mentorFields.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.display = "";
+        console.log("✅ Показал:", id);
+      }
+    });
+  } else {
+    // Студент: показываем свои поля, скрываем наставника
+    studentFields.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.display = "";
+        console.log("✅ Показал:", id);
+      }
+    });
+
+    mentorFields.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.display = "none";
+        console.log("🚫 Скрыл:", id);
+      }
+    });
+  }
+}
 
 // ===== ЗАПОЛНЕНИЕ ФОРМЫ =====
 function fillForm() {
@@ -66,21 +159,21 @@ function renderStudentFiles() {
     list.insertAdjacentHTML(
       "beforeend",
       `
-            <div class="file-item">
-                <div class="file-info">
-                    <span class="file-index">${idx + 1}.</span>
-                    <span class="file-name">${file.name}</span>
-                </div>
-                <div class="file-actions">
-                    <button class="file-action" data-action="delete-student" data-idx="${idx}" title="Удалить">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        `,
+      <div class="file-item">
+        <div class="file-info">
+          <span class="file-index">${idx + 1}.</span>
+          <span class="file-name">${file.name}</span>
+        </div>
+        <div class="file-actions">
+          <button class="file-action" data-action="delete-student" data-idx="${idx}" title="Удалить">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    `,
     );
   });
 
@@ -116,21 +209,21 @@ function renderMentorFiles() {
     list.insertAdjacentHTML(
       "beforeend",
       `
-            <div class="file-item">
-                <div class="file-info">
-                    <span class="file-index">${idx + 1}.</span>
-                    <span class="file-name">${file.name}</span>
-                </div>
-                <div class="file-actions">
-                    <button class="file-action" data-action="delete-mentor" data-idx="${idx}" title="Удалить">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        `,
+      <div class="file-item">
+        <div class="file-info">
+          <span class="file-index">${idx + 1}.</span>
+          <span class="file-name">${file.name}</span>
+        </div>
+        <div class="file-actions">
+          <button class="file-action" data-action="delete-mentor" data-idx="${idx}" title="Удалить">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    `,
     );
   });
 
@@ -158,13 +251,12 @@ function renderSubtasks() {
     const label = document.createElement("label");
     label.className = "subtask" + (subtask.done ? " done" : "");
     label.innerHTML = `
-            <input type="checkbox" class="subtask-checkbox" ${subtask.done ? "checked" : ""} data-idx="${idx}">
-            <span class="subtask-text">${subtask.text}</span>
-        `;
+      <input type="checkbox" class="subtask-checkbox" ${subtask.done ? "checked" : ""} data-idx="${idx}">
+      <span class="subtask-text">${subtask.text}</span>
+    `;
     container.appendChild(label);
   });
 
-  // Кнопка добавления
   const addBtn = document.createElement("button");
   addBtn.className = "tag-add";
   addBtn.textContent = "+";
@@ -180,7 +272,6 @@ function renderSubtasks() {
   });
   container.appendChild(addBtn);
 
-  // Обработчики чекбоксов
   container.querySelectorAll(".subtask-checkbox").forEach((cb) => {
     cb.addEventListener("change", (e) => {
       const idx = Number(e.target.dataset.idx);
@@ -207,16 +298,16 @@ function renderActivity() {
     container.insertAdjacentHTML(
       "beforeend",
       `
-            <div class="activity-item">
-                <span class="activity-icon">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10" />
-                    </svg>
-                </span>
-                <span class="activity-text">${item.text}</span>
-                <span class="activity-time">${item.time}</span>
-            </div>
-        `,
+      <div class="activity-item">
+        <span class="activity-icon">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+          </svg>
+        </span>
+        <span class="activity-text">${item.text}</span>
+        <span class="activity-time">${item.time}</span>
+      </div>
+    `,
     );
   });
 }
@@ -230,10 +321,8 @@ function renderDetails() {
     review: "На проверке",
     done: "Готово",
   };
-  document.getElementById("detailStatus").innerHTML = `
-        <span class="status-dot status-blue"></span>
-        <span>${statusMap[status]}</span>
-    `;
+  document.getElementById("detailStatus").innerHTML =
+    `<span class="status-dot status-blue"></span><span>${statusMap[status]}</span>`;
 
   const prio = currentTask.priority || "med";
   const prioMap = { high: "↑ Высокий", med: "− Средний", low: "↓ Низкий" };
@@ -249,7 +338,6 @@ function renderDetails() {
   document.getElementById("assigneeAvatar").textContent = initial;
   document.getElementById("assigneeText").textContent = assignee;
 
-  // Теги
   const tagsContainer = document.getElementById("detailTags");
   tagsContainer.innerHTML = "";
   const tags = currentTask.tags || [];
@@ -259,6 +347,7 @@ function renderDetails() {
       `<span class="tag">${tag}</span>`,
     );
   });
+
   const addTagBtn = document.createElement("button");
   addTagBtn.className = "tag-add";
   addTagBtn.id = "addTagBtn";
@@ -273,10 +362,6 @@ function renderDetails() {
     }
   });
   tagsContainer.appendChild(addTagBtn);
-
-  // Блок проверки — показываем только при статусе "review"
-  document.getElementById("checkSection").style.display =
-    status === "review" ? "flex" : "none";
 }
 
 // ===== ОБРАБОТЧИКИ ФОРМЫ =====
@@ -299,17 +384,16 @@ function setupFormHandlers() {
     }
   });
 
-  // Отправить на проверку
-  document.getElementById("submitBtn").addEventListener("click", () => {
+  document.getElementById("submitBtn")?.addEventListener("click", () => {
     currentTask.status = "review";
     statusSelect.value = "review";
     addActivity("Задача отправлена на проверку");
     saveTask();
     renderDetails();
+    applyRoleBasedUI(); // Обновляем UI после смены статуса
   });
 
-  // Прикрепить файл (студент)
-  document.getElementById("attachFileBtn").addEventListener("click", () => {
+  document.getElementById("attachFileBtn")?.addEventListener("click", () => {
     const fileName = prompt("Имя файла (например, code.py):");
     if (fileName && fileName.trim()) {
       if (!currentTask.studentFiles) currentTask.studentFiles = [];
@@ -326,27 +410,29 @@ function setupFormHandlers() {
 
 // ===== КНОПКИ ПРОВЕРКИ =====
 function setupCheckButtons() {
-  document.getElementById("acceptBtn").addEventListener("click", () => {
+  document.getElementById("acceptBtn")?.addEventListener("click", () => {
     currentTask.status = "done";
     document.getElementById("taskStatus").value = "done";
     addActivity("Задача принята наставником");
     saveTask();
     renderDetails();
+    applyRoleBasedUI();
   });
 
-  document.getElementById("rejectBtn").addEventListener("click", () => {
+  document.getElementById("rejectBtn")?.addEventListener("click", () => {
     currentTask.status = "in-progress";
     document.getElementById("taskStatus").value = "in-progress";
     addActivity("Задача возвращена на доработку");
     saveTask();
     renderDetails();
+    applyRoleBasedUI();
   });
 }
 
 // ===== НАВИГАЦИЯ =====
 function setupNavigation() {
-  document.getElementById("closeBtn").addEventListener("click", goBack);
-  document.getElementById("cancelBtn").addEventListener("click", goBack);
+  document.getElementById("closeBtn")?.addEventListener("click", goBack);
+  document.getElementById("cancelBtn")?.addEventListener("click", goBack);
 }
 
 function goBack() {
@@ -369,9 +455,6 @@ function saveTask() {
 
 function addActivity(text) {
   if (!currentTask.activity) currentTask.activity = [];
-  currentTask.activity.unshift({
-    text,
-    time: "только что",
-  });
+  currentTask.activity.unshift({ text, time: "только что" });
   renderActivity();
 }
