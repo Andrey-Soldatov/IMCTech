@@ -40,21 +40,25 @@ class BoardResponse(BaseModel):
         from_attributes = True
 
 # ===== BOARD MEMBERS =====
+# ===== BOARD MEMBERS =====
 class BoardMemberCreate(BaseModel):
     user_id: int
-    role: str = "student"
+    role: str = "student"        # 🔥 student или mentor
+    status: str = "participant"  # 🔥 participant или admin
 
 class BoardMemberResponse(BaseModel):
     id: int
     board_id: int
     user_id: int
-    role: str
+    role: str        # 🔥 student/mentor
+    status: str      # 🔥 participant/admin
     
     class Config:
         from_attributes = True
 
 class BoardMemberUpdate(BaseModel):
-    role: Optional[str] = None
+    role: Optional[str] = None        # 🔥 student/mentor
+    status: Optional[str] = None      # 🔥 participant/admin
 
 # ===== TASKS =====
 class TaskCreate(BaseModel):

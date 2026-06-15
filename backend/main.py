@@ -76,11 +76,12 @@ def create_board(board: BoardCreate, current_user: User = Depends(get_current_us
     db.commit()
     db.refresh(new_board)
     
-    # 🔥 Автоматически добавляем владельца как участника с ролью "admin"
+    # 🔥 Владелец = role="mentor" (по умолчанию), status="admin"
     owner_member = BoardMember(
         board_id=new_board.id,
         user_id=current_user.id,
-        role="admin"
+        role="mentor",        # 🔥 Владелец по умолчанию наставник
+        status="admin"        # 🔥 И админ по правам
     )
     db.add(owner_member)
     db.commit()
@@ -189,7 +190,6 @@ def get_board_members(board_id: int, current_user: User = Depends(get_current_us
 
 @app.post("/api/boards/{board_id}/members", response_model=BoardMemberResponse)
 def add_board_member(board_id: int, member: BoardMemberCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Добавить участника в доску"""
     board = db.query(Board).filter(Board.id == board_id).first()
     if not board:
         raise HTTPException(status_code=404, detail="Доска не найдена")
@@ -211,7 +211,8 @@ def add_board_member(board_id: int, member: BoardMemberCreate, current_user: Use
     new_member = BoardMember(
         board_id=board_id,
         user_id=member.user_id,
-        role=member.role
+        role=member.role,        # 🔥 student или mentor
+        status=member.status     # 🔥 participant или admin
     )
     db.add(new_member)
     db.commit()
@@ -221,7 +222,6 @@ def add_board_member(board_id: int, member: BoardMemberCreate, current_user: Use
 
 @app.put("/api/boards/{board_id}/members/{user_id}", response_model=BoardMemberResponse)
 def update_board_member(board_id: int, user_id: int, member_update: BoardMemberUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Обновить роль участника"""
     board = db.query(Board).filter(Board.id == board_id).first()
     if not board:
         raise HTTPException(status_code=404, detail="Доска не найдена")
@@ -236,8 +236,14 @@ def update_board_member(board_id: int, user_id: int, member_update: BoardMemberU
     if not member:
         raise HTTPException(status_code=404, detail="Участник не найден")
     
+    # Нельзя изменить статус владельца
+    if member.user_id == board.owner_id and member_update.status is not None:
+        raise HTTPException(status_code=403, detail="Нельзя изменить статус владельца")
+    
     if member_update.role is not None:
         member.role = member_update.role
+    if member_update.status is not None:
+        member.status = member_update.status
     
     db.commit()
     db.refresh(member)

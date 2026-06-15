@@ -129,6 +129,47 @@
 
     <script type="module" src="../js/app.js"></script>
     <script type="module" src="../js/pages/mainboard.js"></script>
+    <script>
+      (function () {
+        const params = new URLSearchParams(window.location.search);
+        const boardId =
+          params.get("boardId") ||
+          localStorage.getItem("imctech_last_board_id");
+        if (boardId) {
+          const pages = ["mainboard.html", "results.html", "settings.html"];
+          document.querySelectorAll(".sidebar a").forEach(function (link) {
+            const href = link.getAttribute("href") || "";
+            const matched = pages.find(function (p) {
+              return href.includes(p);
+            });
+            if (!matched) return;
+            const parts = href.split("?");
+            const p = new URLSearchParams(parts[1] || "");
+            p.set("boardId", boardId);
+            link.setAttribute("href", parts[0] + "?" + p.toString());
+          });
+          document.querySelectorAll(".sidebar a").forEach(function (link) {
+            if (link.textContent.trim() === "Доска") {
+              link.setAttribute("href", "mainboard.html?boardId=" + boardId);
+            }
+          });
+        }
+        // Подсветка активного пункта
+        const currentPage = window.location.pathname.split("/").pop();
+        document.querySelectorAll(".nav-item").forEach(function (item) {
+          item.classList.remove("active");
+        });
+        document.querySelectorAll(".nav-item a").forEach(function (link) {
+          const href = (link.getAttribute("href") || "")
+            .split("?")[0]
+            .split("/")
+            .pop();
+          if (href === currentPage) {
+            link.closest(".nav-item").classList.add("active");
+          }
+        });
+      })();
+    </script>
 
     <!-- Модальное окно задачи -->
     <div class="modal-overlay" id="taskModal">

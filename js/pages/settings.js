@@ -104,61 +104,66 @@ function renderMembers(members) {
   }
 
   members.forEach((member) => {
-    const isOwner = member.role === "admin";
-    const isCurrentUser = member.user_id === currentUser?.id;
+    const isOwner = member.user_id === currentUser?.id;
 
     const row = document.createElement("tr");
     row.innerHTML = `
-      <td>
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
-          <div class="avatar" style="background: #6366f1; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.875rem;">
-            ${member.userName ? member.userName.charAt(0).toUpperCase() : "?"}
-          </div>
-          <span>${member.userName} ${isCurrentUser ? "(Вы)" : ""}</span>
+    <td>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <div class="avatar" style="background: #6366f1; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.875rem;">
+          ${member.userName ? member.userName.charAt(0).toUpperCase() : "?"}
         </div>
-      </td>
-      <td>${member.userEmail}</td>
-      <td>
-        <select class="role-select" data-user-id="${member.user_id}" ${isOwner ? "disabled" : ""} style="padding: 0.25rem 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
-          <option value="student" ${member.role === "student" ? "selected" : ""}>Студент</option>
-          <option value="mentor" ${member.role === "mentor" ? "selected" : ""}>Наставник</option>
-          <option value="admin" ${member.role === "admin" ? "selected" : ""}>Админ</option>
-        </select>
-      </td>
-      <td>
-        <span class="status-badge" style="padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; background: ${isOwner ? "var(--accent-blue)" : "var(--status-green)"}; color: white;">
-          ${isOwner ? "Админ" : "Активен"}
-        </span>
-      </td>
-      <td class="text-right">
-        ${
-          !isOwner
-            ? `
-          <button class="btn-remove" data-user-id="${member.user_id}" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.75rem; border-radius: 4px; cursor: pointer;">
-            Удалить
-          </button>
-        `
-            : ""
-        }
-      </td>
-    `;
+        <span>${member.userName} ${isOwner ? "(Вы)" : ""}</span>
+      </div>
+    </td>
+    <td>${member.userEmail}</td>
+    
+    <!-- 🔥 РОЛЬ (student/mentor) -->
+    <td>
+      <select class="role-select" data-user-id="${member.user_id}" ${isOwner ? "disabled" : ""} style="padding: 0.25rem 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
+        <option value="student" ${member.role === "student" ? "selected" : ""}>Студент</option>
+        <option value="mentor" ${member.role === "mentor" ? "selected" : ""}>Наставник</option>
+      </select>
+    </td>
+    
+    <!-- 🔥 СТАТУС (participant/admin) -->
+    <td>
+      <select class="status-select" data-user-id="${member.user_id}" ${isOwner ? "disabled" : ""} style="padding: 0.25rem 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
+        <option value="participant" ${member.status === "participant" ? "selected" : ""}>Участник</option>
+        <option value="admin" ${member.status === "admin" ? "selected" : ""}>Админ</option>
+      </select>
+    </td>
+    
+    <td class="text-right">
+      ${
+        !isOwner
+          ? `
+        <button class="btn-remove" data-user-id="${member.user_id}" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.75rem; border-radius: 4px; cursor: pointer;">
+          Удалить
+        </button>
+      `
+          : ""
+      }
+    </td>
+  `;
     tbody.appendChild(row);
   });
 
-  // Обработчики для select роли
+  // Обработчики для роли
   tbody.querySelectorAll(".role-select").forEach((select) => {
     select.addEventListener("change", async (e) => {
       const userId = Number(e.target.dataset.userId);
       const newRole = e.target.value;
-      await updateMemberRole(userId, newRole);
+      await updateMemberRole(userId, { role: newRole });
     });
   });
 
-  // Обработчики для кнопок удаления
-  tbody.querySelectorAll(".btn-remove").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
+  // 🔥 Обработчики для статуса
+  tbody.querySelectorAll(".status-select").forEach((select) => {
+    select.addEventListener("change", async (e) => {
       const userId = Number(e.target.dataset.userId);
-      await removeMember(userId);
+      const newStatus = e.target.value;
+      await updateMemberRole(userId, { status: newStatus });
     });
   });
 }
@@ -245,7 +250,7 @@ async function addMember(userId, role) {
 }
 
 // ===== ОБНОВЛЕНИЕ РОЛИ =====
-async function updateMemberRole(userId, newRole) {
+async function updateMemberRole(userId, updates) {
   try {
     const res = await fetch(
       `${API_URL}/api/boards/${currentBoardId}/members/${userId}`,
@@ -255,23 +260,21 @@ async function updateMemberRole(userId, newRole) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getToken()}`,
         },
-        body: JSON.stringify({
-          role: newRole,
-        }),
+        body: JSON.stringify(updates), // 🔥 Может быть {role: "..."} или {status: "..."}
       },
     );
 
     if (!res.ok) {
       const err = await res.json();
-      showToast(err.detail || "Ошибка при изменении роли", "error");
+      showToast(err.detail || "Ошибка при изменении", "error");
       return;
     }
 
-    console.log("✅ Роль обновлена");
-    showToast("Роль изменена", "success");
+    console.log("✅ Обновлено");
+    showToast("Изменения сохранены", "success");
   } catch (error) {
-    console.error("Update role error:", error);
-    showToast("Ошибка сети при изменении роли", "error");
+    console.error("Update error:", error);
+    showToast("Ошибка сети", "error");
   }
 }
 

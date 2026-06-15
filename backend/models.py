@@ -49,7 +49,8 @@ class BoardMember(Base):
     id = Column(Integer, primary_key=True, index=True)
     board_id = Column(Integer, ForeignKey("boards.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    role = Column(String, default="student")
+    role = Column(String, default="student")        # 🔥 student или mentor
+    status = Column(String, default="participant")  # 🔥 participant или admin
     
     board = relationship("Board", back_populates="members")
     user = relationship("User")

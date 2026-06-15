@@ -7,10 +7,33 @@ function getToken() {
   return localStorage.getItem("imctech_token");
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  // 1. Получаем ID доски из URL
+// ✅ ОДИН ЕДИНСТВЕННЫЙ СЛУШАТЕЛЬ СОБЫТИЯ
+document.addEventListener("DOMContentLoaded", async () => {
+  // 1. ЖЕСТКАЯ ФИКСАЦИЯ ССЫЛОК САЙДБАРА
   const urlParams = new URLSearchParams(window.location.search);
-  currentBoardId = Number(urlParams.get("boardId"));
+  const boardIdFromUrl = urlParams.get("boardId");
+
+  if (boardIdFromUrl) {
+    document.querySelectorAll(".sidebar a").forEach((link) => {
+      const href = link.getAttribute("href");
+      if (href && !href.startsWith("#") && !href.startsWith("http")) {
+        if (
+          href.includes("mainboard.html") ||
+          href.includes("results.html") ||
+          href.includes("settings.html")
+        ) {
+          // Парсим href чтобы не дублировать boardId
+          const [base, query] = href.split("?");
+          const params = new URLSearchParams(query || "");
+          params.set("boardId", boardIdFromUrl);
+          link.setAttribute("href", `${base}?${params.toString()}`);
+        }
+      }
+    });
+  }
+
+  // 2. ИНИЦИАЛИЗАЦИЯ ДОСКИ
+  currentBoardId = Number(boardIdFromUrl);
 
   if (!currentBoardId) {
     window.location.href = "dashboard.html";
@@ -20,18 +43,18 @@ document.addEventListener("DOMContentLoaded", () => {
   // Сохраняем ID последней открытой доски
   localStorage.setItem("imctech_last_board_id", currentBoardId);
 
-  // Обновляем заголовок из localStorage (доски уже загружены на dashboard)
+  // Обновляем заголовок из localStorage
   const board = storage.getBoards().find((b) => b.id === currentBoardId);
   const titleEl = document.querySelector(".breadcrumbs .current");
   if (titleEl && board) titleEl.textContent = board.name;
 
-  // 2. Загружаем задачи через API и рендерим
-  loadAndRenderTasks();
+  // 3. ЗАГРУЗКА И РЕНДЕРИНГ ЗАДАЧ
+  await loadAndRenderTasks();
 
-  // 3. Настраиваем drag-and-drop
+  // 4. НАСТРОЙКА DRAG-AND-DROP
   setupDragAndDrop();
 
-  // 4. Обработчики кнопок "Добавить задачу"
+  // 5. ОБРАБОТЧИКИ КНОПОК "ДОБАВИТЬ ЗАДАЧУ"
   document.querySelectorAll(".add-task-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const column = btn.closest(".column");
@@ -40,7 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // 5. Настраиваем модальное окно
+  // 6. НАСТРОЙКА МОДАЛЬНОГО ОКНА
   setupModalHandlers();
 });
 
@@ -66,7 +89,6 @@ async function loadAndRenderTasks() {
     const apiTasks = await res.json();
     console.log("✅ Задачи загружены:", apiTasks.length);
 
-    // Маппим данные из API в формат localStorage для совместимости
     const currentUser = storage.getCurrentUser();
     const localTasks = apiTasks.map((task) => ({
       id: task.id,
@@ -81,23 +103,19 @@ async function loadAndRenderTasks() {
           ? currentUser.name
           : null,
       assigneeId: task.assignee_id,
-      tags: [], // Пока нет в API
-      studentFiles: [], // Пока нет в API
-      mentorFiles: [], // Пока нет в API
-      mentorComment: "", // Пока нет в API
-      subtasks: [], // Пока нет в API
-      activity: [], // Пока нет в API
+      tags: [],
+      studentFiles: [],
+      mentorFiles: [],
+      mentorComment: "",
+      subtasks: [],
+      activity: [],
       createdAt: new Date().toISOString(),
     }));
 
-    // Сохраняем в localStorage для task-result.js, results.js
     storage.saveTasks(localTasks);
-
-    // Рендерим
     renderTasks(currentBoardId);
   } catch (error) {
     console.error("Load tasks error:", error);
-    // Фоллбэк на localStorage
     renderTasks(currentBoardId);
   }
 }
@@ -107,14 +125,12 @@ function renderTasks(boardId) {
   const allTasks = storage.getTasks();
   const boardTasks = allTasks.filter((t) => t.boardId === boardId);
 
-  // Очищаем колонки (оставляем только кнопки "Добавить")
   document.querySelectorAll(".column-body").forEach((body) => {
     const btn = body.querySelector(".add-task-btn");
     body.innerHTML = "";
     if (btn) body.appendChild(btn);
   });
 
-  // Раскидываем задачи
   boardTasks.forEach((task) => {
     const column = getColumnByStatus(task.status);
     if (column) {
@@ -124,7 +140,6 @@ function renderTasks(boardId) {
     }
   });
 
-  // Обновляем счетчики
   updateCounters(boardId);
 }
 
@@ -148,25 +163,22 @@ function createTaskCard(task) {
       </div>
       <div class="task-actions">
         <span class="task-menu" data-action="edit" title="Редактировать">✏️</span>
-        <span class="task-menu" data-action="delete" title="Удалить">🗑</span>
+        <span class="task-menu" data-action="delete" title="Удалить"></span>
       </div>
     </div>
   `;
 
-  // Клик по карточке → открытие результата
   card.addEventListener("click", (e) => {
     if (!e.target.closest("[data-action]")) {
-      window.location.href = `task-result.html?taskId=${task.id}`;
+      window.location.href = `task-result.html?taskId=${task.id}&boardId=${currentBoardId}`;
     }
   });
 
-  // Редактирование задачи
   card.querySelector('[data-action="edit"]')?.addEventListener("click", (e) => {
     e.stopPropagation();
     openTaskModal(task, currentBoardId, task.status);
   });
 
-  // Удаление задачи
   card
     .querySelector('[data-action="delete"]')
     ?.addEventListener("click", async (e) => {
@@ -174,7 +186,6 @@ function createTaskCard(task) {
       await deleteTask(task.id);
     });
 
-  // Drag events
   card.addEventListener("dragstart", (e) => {
     e.dataTransfer.setData("text/plain", task.id);
     e.dataTransfer.effectAllowed = "move";
@@ -252,7 +263,7 @@ async function moveTask(taskId, newStatus) {
 
     if (!res.ok) {
       const err = await res.json();
-      console.error("❌ Ошибка обновления задачи:", err);
+      console.error(" Ошибка обновления задачи:", err);
       alert(err.detail || "Ошибка при перемещении задачи");
       return;
     }
@@ -260,7 +271,6 @@ async function moveTask(taskId, newStatus) {
     const updatedTask = await res.json();
     console.log("✅ Задача перемещена:", updatedTask);
 
-    // Обновляем в localStorage
     const tasks = storage.getTasks();
     const idx = tasks.findIndex((t) => t.id === taskId);
     if (idx !== -1) {
@@ -292,7 +302,6 @@ async function deleteTask(taskId) {
       return;
     }
 
-    // Удаляем из localStorage
     const tasks = storage.getTasks().filter((t) => t.id !== taskId);
     storage.saveTasks(tasks);
 
@@ -311,12 +320,10 @@ function openTaskModal(task = null, boardId = null, status = "todo") {
   const saveBtn = document.querySelector(".btn-save");
   const form = document.getElementById("taskForm");
 
-  // Сброс формы
   form.reset();
   document.getElementById("editingTaskId").value = "";
 
   if (task) {
-    // Редактирование
     title.textContent = "Редактировать задачу";
     saveBtn.textContent = "Сохранить";
     document.getElementById("editingTaskId").value = task.id;
@@ -329,7 +336,6 @@ function openTaskModal(task = null, boardId = null, status = "todo") {
       ? task.tags.join(", ")
       : "";
   } else {
-    // Создание
     title.textContent = "Новая задача";
     saveBtn.textContent = "Создать задачу";
     document.getElementById("taskStatus").value = status;
@@ -344,7 +350,6 @@ function closeTaskModal() {
 }
 
 function setupModalHandlers() {
-  // Закрытие по кнопкам
   document
     .getElementById("modalClose")
     ?.addEventListener("click", closeTaskModal);
@@ -352,14 +357,12 @@ function setupModalHandlers() {
     .getElementById("modalCancel")
     ?.addEventListener("click", closeTaskModal);
 
-  // Закрытие по клику на overlay
   document.getElementById("taskModal")?.addEventListener("click", (e) => {
     if (e.target === e.currentTarget) {
       closeTaskModal();
     }
   });
 
-  // Закрытие по Escape
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       const modal = document.getElementById("taskModal");
@@ -369,7 +372,6 @@ function setupModalHandlers() {
     }
   });
 
-  // Обработка формы
   document.getElementById("taskForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const editingId = document.getElementById("editingTaskId").value;
@@ -395,12 +397,11 @@ function setupModalHandlers() {
       priority: document.getElementById("taskPriority").value,
       due_date: document.getElementById("taskDueDate").value.trim() || null,
       board_id: currentBoardId,
-      assignee_id: null, // Пока не реализовано
+      assignee_id: null,
     };
 
     try {
       if (editingId) {
-        // Редактирование через API
         const res = await fetch(`${API_URL}/api/tasks/${editingId}`, {
           method: "PUT",
           headers: {
@@ -419,7 +420,6 @@ function setupModalHandlers() {
         const updatedTask = await res.json();
         console.log("✅ Задача обновлена:", updatedTask);
 
-        // Обновляем в localStorage
         const tasks = storage.getTasks();
         const idx = tasks.findIndex((t) => t.id === Number(editingId));
         if (idx !== -1) {
@@ -432,7 +432,6 @@ function setupModalHandlers() {
           storage.saveTasks(tasks);
         }
       } else {
-        // Создание через API
         const res = await fetch(`${API_URL}/api/tasks`, {
           method: "POST",
           headers: {
@@ -451,7 +450,6 @@ function setupModalHandlers() {
         const newTask = await res.json();
         console.log("✅ Задача создана:", newTask);
 
-        // Добавляем в localStorage
         const tasks = storage.getTasks();
         tasks.push({
           id: newTask.id,
@@ -502,7 +500,11 @@ function showToast(message, type = "info") {
   const toast = document.createElement("div");
   toast.className = `toast toast-${type}`;
   toast.textContent = message;
-  toast.style.cssText = `position: fixed; bottom: 2rem; right: 2rem; padding: 1rem 1.5rem; background: ${type === "success" ? "var(--status-green, #22c55e)" : "var(--accent-blue, #3b82f6)"}; color: white; border-radius: var(--radius-md, 8px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10000; animation: slideIn 0.3s ease;`;
+  toast.style.cssText = `position: fixed; bottom: 2rem; right: 2rem; padding: 1rem 1.5rem; background: ${
+    type === "success"
+      ? "var(--status-green, #22c55e)"
+      : "var(--accent-blue, #3b82f6)"
+  }; color: white; border-radius: var(--radius-md, 8px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10000; animation: slideIn 0.3s ease;`;
   document.body.appendChild(toast);
   setTimeout(() => {
     toast.style.animation = "slideOut 0.3s ease";
@@ -510,7 +512,6 @@ function showToast(message, type = "info") {
   }, 3000);
 }
 
-// Добавляем CSS для анимаций
 if (!document.getElementById("toast-styles")) {
   const style = document.createElement("style");
   style.id = "toast-styles";
