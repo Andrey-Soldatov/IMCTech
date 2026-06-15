@@ -19,31 +19,54 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   currentUser = storage.getCurrentUser();
 
-  // Обновляем заголовок
   const board = storage.getBoards().find((b) => b.id === currentBoardId);
   const titleEl = document.querySelector(".page-title");
   if (titleEl && board) titleEl.textContent = `Настройки: ${board.name}`;
 
-  // Загружаем участников
   await loadMembers();
-
-  // Настраиваем форму приглашения
   setupInviteForm();
-
-  // Настраиваем кнопку удаления доски
   setupDeleteBoardBtn();
-
-  // Настраиваем кнопку копирования ссылки
   setupCopyLinkBtn();
 });
+
+// ===== ЦВЕТА ДЛЯ РОЛЕЙ И СТАТУСОВ =====
+const ROLE_COLORS = {
+  student: {
+    bg: "rgba(59, 130, 246, 0.15)",
+    text: "#3b82f6",
+    border: "#3b82f6",
+  },
+  mentor: {
+    bg: "rgba(245, 158, 11, 0.15)",
+    text: "#f59e0b",
+    border: "#f59e0b",
+  },
+};
+
+const STATUS_COLORS = {
+  participant: {
+    bg: "rgba(34, 197, 94, 0.15)",
+    text: "#22c55e",
+    border: "#22c55e",
+  },
+  admin: { bg: "rgba(168, 85, 247, 0.15)", text: "#a855f7", border: "#a855f7" },
+};
+
+const ROLE_LABELS = {
+  student: "Студент",
+  mentor: "Наставник",
+};
+
+const STATUS_LABELS = {
+  participant: "Участник",
+  admin: "Админ",
+};
 
 // ===== ЗАГРУЗКА УЧАСТНИКОВ =====
 async function loadMembers() {
   try {
     const res = await fetch(`${API_URL}/api/boards/${currentBoardId}/members`, {
-      headers: {
-        Authorization: `Bearer ${getToken()}`,
-      },
+      headers: { Authorization: `Bearer ${getToken()}` },
     });
 
     if (!res.ok) {
@@ -58,40 +81,20 @@ async function loadMembers() {
 
     const members = await res.json();
     console.log("✅ Участники загружены:", members);
-
-    // Получаем информацию о пользователях
-    const membersWithInfo = await Promise.all(
-      members.map(async (member) => {
-        if (member.user_id === currentUser?.id) {
-          return {
-            ...member,
-            userName: currentUser.name,
-            userEmail: currentUser.email,
-          };
-        }
-        return {
-          ...member,
-          userName: `Пользователь #${member.user_id}`,
-          userEmail: "unknown@example.com",
-        };
-      }),
-    );
-
-    renderMembers(membersWithInfo);
+    renderMembers(members);
   } catch (error) {
     console.error("Load members error:", error);
     showToast("Ошибка загрузки участников", "error");
   }
 }
 
-// ===== РЕНДЕРИНГ УЧАСТНИКОВ В ТАБЛИЦУ =====
+// ===== РЕНДЕРИНГ =====
 function renderMembers(members) {
   const tbody = document.querySelector(".users-table tbody");
   if (!tbody) return;
 
   tbody.innerHTML = "";
 
-  // Обновляем счетчик
   const membersTitle = document.getElementById("membersTitle");
   if (membersTitle) {
     membersTitle.textContent = `Участники (${members.length})`;
@@ -105,47 +108,54 @@ function renderMembers(members) {
 
   members.forEach((member) => {
     const isOwner = member.user_id === currentUser?.id;
+    const role = member.role || "student";
+    const status = member.status || "participant";
+    const userName = member.user_name || `Пользователь #${member.user_id}`;
+    const userEmail = member.user_email || "unknown@example.com";
+
+    const roleColor = ROLE_COLORS[role] || ROLE_COLORS.student;
+    const statusColor = STATUS_COLORS[status] || STATUS_COLORS.participant;
 
     const row = document.createElement("tr");
     row.innerHTML = `
-    <td>
-      <div style="display: flex; align-items: center; gap: 0.5rem;">
-        <div class="avatar" style="background: #6366f1; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.875rem;">
-          ${member.userName ? member.userName.charAt(0).toUpperCase() : "?"}
+      <td>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <div class="avatar" style="background: #6366f1; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.875rem;">
+            ${userName.charAt(0).toUpperCase()}
+          </div>
+          <span>${userName} ${isOwner ? "(Вы)" : ""}</span>
         </div>
-        <span>${member.userName} ${isOwner ? "(Вы)" : ""}</span>
-      </div>
-    </td>
-    <td>${member.userEmail}</td>
-    
-    <!-- 🔥 РОЛЬ (student/mentor) -->
-    <td>
-      <select class="role-select" data-user-id="${member.user_id}" ${isOwner ? "disabled" : ""} style="padding: 0.25rem 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
-        <option value="student" ${member.role === "student" ? "selected" : ""}>Студент</option>
-        <option value="mentor" ${member.role === "mentor" ? "selected" : ""}>Наставник</option>
-      </select>
-    </td>
-    
-    <!-- 🔥 СТАТУС (participant/admin) -->
-    <td>
-      <select class="status-select" data-user-id="${member.user_id}" ${isOwner ? "disabled" : ""} style="padding: 0.25rem 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
-        <option value="participant" ${member.status === "participant" ? "selected" : ""}>Участник</option>
-        <option value="admin" ${member.status === "admin" ? "selected" : ""}>Админ</option>
-      </select>
-    </td>
-    
-    <td class="text-right">
-      ${
-        !isOwner
-          ? `
-        <button class="btn-remove" data-user-id="${member.user_id}" style="background: #ef4444; color: white; border: none; padding: 0.25rem 0.75rem; border-radius: 4px; cursor: pointer;">
-          Удалить
-        </button>
-      `
-          : ""
-      }
-    </td>
-  `;
+      </td>
+      <td>${userEmail}</td>
+      <td>
+        <select class="role-select" data-user-id="${member.user_id}" ${isOwner ? "disabled" : ""} 
+          style="padding: 0.4rem 0.6rem; border-radius: 6px; font-weight: 500; cursor: ${isOwner ? "not-allowed" : "pointer"}; 
+          background: ${roleColor.bg}; color: ${roleColor.text}; border: 1px solid ${roleColor.border};">
+          <option value="student" ${role === "student" ? "selected" : ""}>Студент</option>
+          <option value="mentor" ${role === "mentor" ? "selected" : ""}>Наставник</option>
+        </select>
+      </td>
+      <td>
+        <select class="status-select" data-user-id="${member.user_id}" ${isOwner ? "disabled" : ""}
+          style="padding: 0.4rem 0.6rem; border-radius: 6px; font-weight: 500; cursor: ${isOwner ? "not-allowed" : "pointer"};
+          background: ${statusColor.bg}; color: ${statusColor.text}; border: 1px solid ${statusColor.border};">
+          <option value="participant" ${status === "participant" ? "selected" : ""}>Участник</option>
+          <option value="admin" ${status === "admin" ? "selected" : ""}>Админ</option>
+        </select>
+      </td>
+      <td class="text-right">
+        ${
+          !isOwner
+            ? `
+          <button class="btn-remove" data-user-id="${member.user_id}" 
+            style="background: #ef4444; color: white; border: none; padding: 0.4rem 0.9rem; border-radius: 6px; cursor: pointer; font-weight: 500;">
+            Удалить
+          </button>
+        `
+            : ""
+        }
+      </td>
+    `;
     tbody.appendChild(row);
   });
 
@@ -154,18 +164,84 @@ function renderMembers(members) {
     select.addEventListener("change", async (e) => {
       const userId = Number(e.target.dataset.userId);
       const newRole = e.target.value;
-      await updateMemberRole(userId, { role: newRole });
+      await updateMember(userId, { role: newRole });
     });
   });
 
-  // 🔥 Обработчики для статуса
+  // Обработчики для статуса
   tbody.querySelectorAll(".status-select").forEach((select) => {
     select.addEventListener("change", async (e) => {
       const userId = Number(e.target.dataset.userId);
       const newStatus = e.target.value;
-      await updateMemberRole(userId, { status: newStatus });
+      await updateMember(userId, { status: newStatus });
     });
   });
+
+  // Обработчики для кнопок удаления
+  tbody.querySelectorAll(".btn-remove").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      const userId = Number(e.target.dataset.userId);
+      await removeMember(userId);
+    });
+  });
+}
+
+// ===== ОБНОВЛЕНИЕ УЧАСТНИКА =====
+async function updateMember(userId, updates) {
+  try {
+    const res = await fetch(
+      `${API_URL}/api/boards/${currentBoardId}/members/${userId}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify(updates),
+      },
+    );
+
+    if (!res.ok) {
+      const err = await res.json();
+      showToast(err.detail || "Ошибка при изменении", "error");
+      return;
+    }
+
+    console.log("✅ Обновлено:", updates);
+    await loadMembers();
+    showToast("Изменения сохранены", "success");
+  } catch (error) {
+    console.error("Update error:", error);
+    showToast("Ошибка сети", "error");
+  }
+}
+
+// ===== УДАЛЕНИЕ УЧАСТНИКА =====
+async function removeMember(userId) {
+  if (!confirm("Удалить участника из доски?")) return;
+
+  try {
+    const res = await fetch(
+      `${API_URL}/api/boards/${currentBoardId}/members/${userId}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${getToken()}` },
+      },
+    );
+
+    if (!res.ok) {
+      const err = await res.json();
+      showToast(err.detail || "Ошибка при удалении", "error");
+      return;
+    }
+
+    console.log("✅ Участник удалён");
+    await loadMembers();
+    showToast("Участник удалён", "success");
+  } catch (error) {
+    console.error("Remove member error:", error);
+    showToast("Ошибка сети при удалении", "error");
+  }
 }
 
 // ===== ФОРМА ПРИГЛАШЕНИЯ =====
@@ -189,15 +265,10 @@ function setupInviteForm() {
       return;
     }
 
-    // Ищем пользователя по email
     try {
       const searchRes = await fetch(
         `${API_URL}/api/users/search?email=${encodeURIComponent(email)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${getToken()}`,
-          },
-        },
+        { headers: { Authorization: `Bearer ${getToken()}` } },
       );
 
       if (!searchRes.ok) throw new Error("Ошибка поиска");
@@ -210,8 +281,7 @@ function setupInviteForm() {
         return;
       }
 
-      // Добавляем участника
-      await addMember(user.id, role);
+      await addMember(user.id, role, status);
       emailInput.value = "";
     } catch (error) {
       console.error("Invite error:", error);
@@ -220,7 +290,7 @@ function setupInviteForm() {
   });
 }
 
-async function addMember(userId, role) {
+async function addMember(userId, role, status) {
   try {
     const res = await fetch(`${API_URL}/api/boards/${currentBoardId}/members`, {
       method: "POST",
@@ -228,15 +298,12 @@ async function addMember(userId, role) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${getToken()}`,
       },
-      body: JSON.stringify({
-        user_id: userId,
-        role: role,
-      }),
+      body: JSON.stringify({ user_id: userId, role, status }),
     });
 
     if (!res.ok) {
       const err = await res.json();
-      showToast(err.detail || "Ошибка при добавлении участника", "error");
+      showToast(err.detail || "Ошибка при добавлении", "error");
       return;
     }
 
@@ -245,66 +312,7 @@ async function addMember(userId, role) {
     showToast("Участник добавлен", "success");
   } catch (error) {
     console.error("Add member error:", error);
-    showToast("Ошибка сети при добавлении участника", "error");
-  }
-}
-
-// ===== ОБНОВЛЕНИЕ РОЛИ =====
-async function updateMemberRole(userId, updates) {
-  try {
-    const res = await fetch(
-      `${API_URL}/api/boards/${currentBoardId}/members/${userId}`,
-      {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getToken()}`,
-        },
-        body: JSON.stringify(updates), // 🔥 Может быть {role: "..."} или {status: "..."}
-      },
-    );
-
-    if (!res.ok) {
-      const err = await res.json();
-      showToast(err.detail || "Ошибка при изменении", "error");
-      return;
-    }
-
-    console.log("✅ Обновлено");
-    showToast("Изменения сохранены", "success");
-  } catch (error) {
-    console.error("Update error:", error);
     showToast("Ошибка сети", "error");
-  }
-}
-
-// ===== УДАЛЕНИЕ УЧАСТНИКА =====
-async function removeMember(userId) {
-  if (!confirm("Удалить участника из доски?")) return;
-
-  try {
-    const res = await fetch(
-      `${API_URL}/api/boards/${currentBoardId}/members/${userId}`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${getToken()}`,
-        },
-      },
-    );
-
-    if (!res.ok) {
-      const err = await res.json();
-      showToast(err.detail || "Ошибка при удалении участника", "error");
-      return;
-    }
-
-    console.log("✅ Участник удалён");
-    await loadMembers();
-    showToast("Участник удалён", "success");
-  } catch (error) {
-    console.error("Remove member error:", error);
-    showToast("Ошибка сети при удалении участника", "error");
   }
 }
 
@@ -319,9 +327,7 @@ function setupDeleteBoardBtn() {
     try {
       const res = await fetch(`${API_URL}/api/boards/${currentBoardId}`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${getToken()}`,
-        },
+        headers: { Authorization: `Bearer ${getToken()}` },
       });
 
       if (!res.ok) {
@@ -330,7 +336,6 @@ function setupDeleteBoardBtn() {
         return;
       }
 
-      // Удаляем из localStorage
       const boards = storage.getBoards().filter((b) => b.id !== currentBoardId);
       storage.saveBoards(boards);
       const tasks = storage
@@ -344,7 +349,7 @@ function setupDeleteBoardBtn() {
       }, 1000);
     } catch (error) {
       console.error("Delete board error:", error);
-      showToast("Ошибка сети при удалении доски", "error");
+      showToast("Ошибка сети", "error");
     }
   });
 }
@@ -357,7 +362,6 @@ function setupCopyLinkBtn() {
   copyBtn.addEventListener("click", () => {
     const linkInput = copyBtn.previousElementSibling;
     if (!linkInput) return;
-
     linkInput.select();
     document.execCommand("copy");
     showToast("Ссылка скопирована", "success");
@@ -367,9 +371,10 @@ function setupCopyLinkBtn() {
 // ===== TOAST =====
 function showToast(message, type = "info") {
   const toast = document.createElement("div");
-  toast.className = `toast toast-${type}`;
   toast.textContent = message;
-  toast.style.cssText = `position: fixed; bottom: 2rem; right: 2rem; padding: 1rem 1.5rem; background: ${type === "success" ? "var(--status-green, #22c55e)" : type === "error" ? "#ef4444" : "var(--accent-blue, #3b82f6)"}; color: white; border-radius: var(--radius-md, 8px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10000; animation: slideIn 0.3s ease;`;
+  toast.style.cssText = `position: fixed; bottom: 2rem; right: 2rem; padding: 1rem 1.5rem; background: ${
+    type === "success" ? "#22c55e" : type === "error" ? "#ef4444" : "#3b82f6"
+  }; color: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10000; animation: slideIn 0.3s ease;`;
   document.body.appendChild(toast);
   setTimeout(() => {
     toast.style.animation = "slideOut 0.3s ease";
@@ -377,7 +382,6 @@ function showToast(message, type = "info") {
   }, 3000);
 }
 
-// Добавляем CSS для анимаций
 if (!document.getElementById("toast-styles")) {
   const style = document.createElement("style");
   style.id = "toast-styles";

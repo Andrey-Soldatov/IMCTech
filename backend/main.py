@@ -76,12 +76,11 @@ def create_board(board: BoardCreate, current_user: User = Depends(get_current_us
     db.commit()
     db.refresh(new_board)
     
-    # 🔥 Владелец = role="mentor" (по умолчанию), status="admin"
     owner_member = BoardMember(
         board_id=new_board.id,
         user_id=current_user.id,
-        role="mentor",        # 🔥 Владелец по умолчанию наставник
-        status="admin"        # 🔥 И админ по правам
+        role="mentor",
+        status="admin"  #  Владелец = админ
     )
     db.add(owner_member)
     db.commit()
@@ -171,7 +170,6 @@ def delete_task(task_id: int, current_user: User = Depends(get_current_user), db
 # ===== BOARD MEMBER ENDPOINTS =====
 @app.get("/api/boards/{board_id}/members", response_model=list[BoardMemberResponse])
 def get_board_members(board_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Получить список участников доски"""
     board = db.query(Board).filter(Board.id == board_id).first()
     if not board:
         raise HTTPException(status_code=404, detail="Доска не найдена")
@@ -186,7 +184,22 @@ def get_board_members(board_id: int, current_user: User = Depends(get_current_us
         raise HTTPException(status_code=403, detail="Нет доступа к доске")
     
     members = db.query(BoardMember).filter(BoardMember.board_id == board_id).all()
-    return members
+    
+    # 🔥 Добавляем данные пользователя к каждому участнику
+    result = []
+    for m in members:
+        user = db.query(User).filter(User.id == m.user_id).first()
+        result.append({
+            "id": m.id,
+            "board_id": m.board_id,
+            "user_id": m.user_id,
+            "role": m.role,
+            "status": m.status if hasattr(m, 'status') else "participant",
+            "user_name": user.name if user else None,
+            "user_email": user.email if user else None,
+        })
+    
+    return result
 
 @app.post("/api/boards/{board_id}/members", response_model=BoardMemberResponse)
 def add_board_member(board_id: int, member: BoardMemberCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -211,14 +224,22 @@ def add_board_member(board_id: int, member: BoardMemberCreate, current_user: Use
     new_member = BoardMember(
         board_id=board_id,
         user_id=member.user_id,
-        role=member.role,        # 🔥 student или mentor
-        status=member.status     # 🔥 participant или admin
+        role=member.role,
+        status=member.status if hasattr(member, 'status') else "participant"  # 🔥
     )
     db.add(new_member)
     db.commit()
     db.refresh(new_member)
     
-    return new_member
+    return {
+        "id": new_member.id,
+        "board_id": new_member.board_id,
+        "user_id": new_member.user_id,
+        "role": new_member.role,
+        "status": new_member.status if hasattr(new_member, 'status') else "participant",
+        "user_name": user.name,
+        "user_email": user.email,
+    }
 
 @app.put("/api/boards/{board_id}/members/{user_id}", response_model=BoardMemberResponse)
 def update_board_member(board_id: int, user_id: int, member_update: BoardMemberUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -236,7 +257,6 @@ def update_board_member(board_id: int, user_id: int, member_update: BoardMemberU
     if not member:
         raise HTTPException(status_code=404, detail="Участник не найден")
     
-    # Нельзя изменить статус владельца
     if member.user_id == board.owner_id and member_update.status is not None:
         raise HTTPException(status_code=403, detail="Нельзя изменить статус владельца")
     
@@ -248,7 +268,16 @@ def update_board_member(board_id: int, user_id: int, member_update: BoardMemberU
     db.commit()
     db.refresh(member)
     
-    return member
+    user = db.query(User).filter(User.id == member.user_id).first()
+    return {
+        "id": member.id,
+        "board_id": member.board_id,
+        "user_id": member.user_id,
+        "role": member.role,
+        "status": member.status if hasattr(member, 'status') else "participant",
+        "user_name": user.name if user else None,
+        "user_email": user.email if user else None,
+    }
 
 @app.delete("/api/boards/{board_id}/members/{user_id}")
 def remove_board_member(board_id: int, user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):

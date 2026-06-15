@@ -50,8 +50,10 @@ class BoardMemberResponse(BaseModel):
     id: int
     board_id: int
     user_id: int
-    role: str        # 🔥 student/mentor
-    status: str      # 🔥 participant/admin
+    role: str
+    status: str = "participant"  # 🔥 Добавили status
+    user_name: Optional[str] = None      # 🔥 Имя пользователя
+    user_email: Optional[str] = None     # 🔥 Email пользователя
     
     class Config:
         from_attributes = True
