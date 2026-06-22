@@ -24,6 +24,10 @@
   --transition: 0.2s ease;
 }
 
+.dot-review {
+  background: #f59e0b; /* оранжевый для "На проверке" */
+}
+
 * {
   box-sizing: border-box;
   margin: 0;

@@ -257,6 +257,7 @@ function getStatusFromColumn(column) {
   if (!title) return "todo";
   if (title.includes("Не начато")) return "todo";
   if (title.includes("В работе")) return "in-progress";
+  if (title.includes("На проверке")) return "review";
   if (title.includes("Готово")) return "done";
   return "todo";
 }
@@ -265,6 +266,7 @@ function getColumnByStatus(status) {
   const titles = {
     todo: "Не начато",
     "in-progress": "В работе",
+    review: "На проверке",
     done: "Готово",
   };
   return Array.from(document.querySelectorAll(".column")).find(
@@ -490,6 +492,9 @@ function updateCounters(boardId) {
   ).length;
   document.getElementById("count-progress").textContent = tasks.filter(
     (t) => t.status === "in-progress",
+  ).length;
+  document.getElementById("count-review").textContent = tasks.filter(
+    (t) => t.status === "review",
   ).length;
   document.getElementById("count-done").textContent = tasks.filter(
     (t) => t.status === "done",

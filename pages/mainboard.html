@@ -88,11 +88,9 @@
               <div class="column-header">
                 <span class="column-dot dot-todo"></span>
                 <h3 class="column-title">Не начато</h3>
-                <!-- Добавлен класс -->
                 <span class="column-count" id="count-todo">0</span>
               </div>
               <div class="column-body">
-                <!-- Карточки удалили, скрипт их нарисует сам -->
                 <button class="add-task-btn">+ Добавить задачу</button>
               </div>
             </div>
@@ -102,7 +100,6 @@
               <div class="column-header">
                 <span class="column-dot dot-progress"></span>
                 <h3 class="column-title">В работе</h3>
-                <!-- Добавлен класс -->
                 <span class="column-count" id="count-progress">0</span>
               </div>
               <div class="column-body">
@@ -110,17 +107,24 @@
               </div>
             </div>
 
-            <!-- Колонка 3: Готово -->
+            <!-- 🔥 Колонка 3: На проверке (НОВАЯ) -->
+            <div class="column">
+              <div class="column-header">
+                <span class="column-dot dot-review"></span>
+                <h3 class="column-title">На проверке</h3>
+                <span class="column-count" id="count-review">0</span>
+              </div>
+              <div class="column-body"></div>
+            </div>
+
+            <!-- Колонка 4: Готово -->
             <div class="column">
               <div class="column-header">
                 <span class="column-dot dot-done"></span>
                 <h3 class="column-title">Готово</h3>
-                <!-- Добавлен класс -->
                 <span class="column-count" id="count-done">0</span>
               </div>
-              <div class="column-body">
-                <button class="add-task-btn">+ Добавить задачу</button>
-              </div>
+              <div class="column-body"></div>
             </div>
           </div>
         </main>

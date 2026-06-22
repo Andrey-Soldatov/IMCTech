@@ -446,13 +446,42 @@ function setupFormHandlers() {
     }
   });
 
-  document.getElementById("submitBtn")?.addEventListener("click", () => {
+  document.getElementById("submitBtn")?.addEventListener("click", async () => {
     currentTask.status = "review";
     statusSelect.value = "review";
     addActivity("Задача отправлена на проверку");
     saveTask();
+
+    // 🔥 ОТПРАВЛЯЕМ НА БЭКЕНД
+    try {
+      const res = await fetch(`${API_URL}/api/tasks/${currentTask.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ status: "review" }),
+      });
+
+      if (!res.ok) {
+        console.error("Ошибка обновления статуса:", await res.json());
+      } else {
+        console.log("✅ Статус обновлён на review");
+      }
+    } catch (error) {
+      console.error("Ошибка сети:", error);
+    }
+
     renderDetails();
     applyRoleBasedUI();
+
+    // 🔥 Показываем уведомление и возвращаемся на доску
+    showToast("Задача отправлена на проверку", "success");
+    setTimeout(() => {
+      if (currentBoardId) {
+        window.location.href = `mainboard.html?boardId=${currentBoardId}`;
+      }
+    }, 1000);
   });
 
   document.getElementById("attachFileBtn")?.addEventListener("click", () => {
@@ -483,20 +512,62 @@ function setupFormHandlers() {
 
 // ===== КНОПКИ ПРОВЕРКИ =====
 function setupCheckButtons() {
-  document.getElementById("acceptBtn")?.addEventListener("click", () => {
+  document.getElementById("acceptBtn")?.addEventListener("click", async () => {
     currentTask.status = "done";
     document.getElementById("taskStatus").value = "done";
     addActivity("Задача принята наставником");
     saveTask();
+
+    // 🔥 Отправляем на бэкенд
+    try {
+      const res = await fetch(`${API_URL}/api/tasks/${currentTask.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ status: "done" }),
+      });
+
+      if (!res.ok) {
+        console.error("Ошибка обновления статуса:", await res.json());
+      } else {
+        console.log("✅ Статус обновлён на done");
+      }
+    } catch (error) {
+      console.error("Ошибка сети:", error);
+    }
+
     renderDetails();
     applyRoleBasedUI();
   });
 
-  document.getElementById("rejectBtn")?.addEventListener("click", () => {
+  document.getElementById("rejectBtn")?.addEventListener("click", async () => {
     currentTask.status = "in-progress";
     document.getElementById("taskStatus").value = "in-progress";
     addActivity("Задача возвращена на доработку");
     saveTask();
+
+    // 🔥 Отправляем на бэкенд
+    try {
+      const res = await fetch(`${API_URL}/api/tasks/${currentTask.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ status: "in-progress" }),
+      });
+
+      if (!res.ok) {
+        console.error("Ошибка обновления статуса:", await res.json());
+      } else {
+        console.log("✅ Статус обновлён на in-progress");
+      }
+    } catch (error) {
+      console.error("Ошибка сети:", error);
+    }
+
     renderDetails();
     applyRoleBasedUI();
   });
