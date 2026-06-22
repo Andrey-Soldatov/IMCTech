@@ -3,8 +3,9 @@ import { storage } from "../utils/storage.js";
 const API_URL = "http://localhost:3000";
 let currentTask = null;
 let currentBoardId = null;
-let currentUserRole = "student"; // student или mentor — это ТОЛЬКО начальное значение до загрузки
-let currentUserStatus = "participant"; // participant или admin — это ТОЛЬКО начальное значение до загрузки
+let currentUserRole = "student";
+let currentUserStatus = "participant";
+let boardMembers = []; // 🔥 Кэш участников доски
 
 function getToken() {
   return localStorage.getItem("imctech_token");
@@ -19,7 +20,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
-  // 1. Загружаем задачу из localStorage
   const tasks = storage.getTasks();
   currentTask = tasks.find((t) => t.id === taskId);
   if (!currentTask) {
@@ -30,10 +30,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   currentBoardId = currentTask.boardId;
 
-  // 2. Определяем роль пользователя через API
+  // 1. Определяем роль
   await detectUserRole();
+  console.log("✅ Роль определена:", currentUserRole);
 
-  // 3. Рендерим все блоки
+  // 🔥 2. Загружаем участников доски (для выбора ответственного)
+  await loadBoardMembers();
+
+  // 3. Рендерим всё
   fillForm();
   renderStudentFiles();
   renderMentorComment();
@@ -42,181 +46,126 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderActivity();
   renderDetails();
 
-  // 4. Настраиваем обработчики
+  // 4. Обработчики
   setupFormHandlers();
   setupCheckButtons();
   setupNavigation();
 
-  // 5. Применяем ролевую логику (скрываем/показываем блоки)
+  // 5. Ролевая логика
   applyRoleBasedUI();
 });
 
 // ===== ОПРЕДЕЛЕНИЕ РОЛИ =====
 async function detectUserRole() {
-  console.log("🔍 [detectUserRole] currentBoardId =", currentBoardId);
+  if (!currentBoardId) return;
+  try {
+    const res = await fetch(`${API_URL}/api/boards/${currentBoardId}/members`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    if (!res.ok) return;
+    const members = await res.json();
+    const currentUser = storage.getCurrentUser();
+    const member = members.find((m) => m.user_id === currentUser?.id);
 
-  if (!currentBoardId) {
-    console.warn(
-      "🔍 [detectUserRole] нет currentBoardId — остаюсь student по умолчанию",
-    );
-    return;
+    if (member) {
+      currentUserRole = member.role || "student";
+      currentUserStatus = member.status || "participant";
+    }
+  } catch (error) {
+    console.warn("Не удалось определить роль:", error);
   }
+}
+
+// 🔥 ===== ЗАГРУЗКА УЧАСТНИКОВ ДОСКИ =====
+async function loadBoardMembers() {
+  if (!currentBoardId) return;
 
   try {
     const res = await fetch(`${API_URL}/api/boards/${currentBoardId}/members`, {
       headers: { Authorization: `Bearer ${getToken()}` },
     });
 
-    console.log("🔍 [detectUserRole] ответ /members:", res.status);
-
     if (!res.ok) {
-      console.warn(
-        `🔍 [detectUserRole] запрос участников провалился (HTTP ${res.status}) — остаюсь student по умолчанию`,
-      );
+      console.error("Ошибка загрузки участников:", res.status);
       return;
     }
 
-    const members = await res.json();
-    const currentUser = storage.getCurrentUser();
-
-    console.log("🔍 [detectUserRole] currentUser.id =", currentUser?.id);
-    console.log("🔍 [detectUserRole] участники доски:", members);
-
-    const member = members.find((m) => m.user_id === currentUser?.id);
-
-    if (member) {
-      currentUserRole = member.role || "student";
-      currentUserStatus = member.status || "participant";
-      console.log(
-        `✅ [detectUserRole] найден как участник: role=${currentUserRole}, status=${currentUserStatus}`,
-      );
-    } else {
-      console.warn(
-        "⚠️ [detectUserRole] currentUser.id НЕ найден в списке участников доски — остаюсь student/participant по умолчанию. Проверь, что ты реально привязан как участник к этой доске (board_id =",
-        currentBoardId,
-        ")",
-      );
-    }
+    boardMembers = await res.json();
+    console.log("✅ Участники доски:", boardMembers);
   } catch (error) {
-    console.warn(
-      "Не удалось определить роль, используем student по умолчанию:",
-      error,
-    );
+    console.error("Ошибка сети при загрузке участников:", error);
   }
 }
 
 // ===== РОЛЕВАЯ ЛОГИКА UI =====
 function applyRoleBasedUI() {
   console.log("🎭 Применяю UI для роли:", currentUserRole);
-
   const isMentor = currentUserRole === "mentor";
 
-  // 🔥 Наставник ВИДИТ поля студента (readOnly), но не может отправлять на проверку
-  const studentOnlyFields = ["submitBtn"];
-
-  // Поля наставника
+  const studentFields = [
+    "taskTitle",
+    "taskStatus",
+    "taskDescription",
+    "submitBtn",
+  ];
   const mentorFields = ["mentorComment", "checkSection"];
 
   if (isMentor) {
-    // Скрываем только кнопку "Отправить на проверку"
-    studentOnlyFields.forEach((id) => {
+    studentFields.forEach((id) => {
       const el = document.getElementById(id);
-      if (el) el.style.display = "none";
+      if (el) {
+        el.style.display = "none";
+      }
     });
-
-    // Показываем поля наставника
     mentorFields.forEach((id) => {
       const el = document.getElementById(id);
-      if (el) el.style.display = "";
+      if (el) {
+        el.style.display = "";
+      }
     });
-
-    // 🔥 Показываем кнопку прикрепления файла наставнику
-    const attachBtn = document.getElementById("attachFileBtn");
-    if (attachBtn) attachBtn.style.display = "";
   } else {
-    // Студент: показываем всё своё
-    studentOnlyFields.forEach((id) => {
+    studentFields.forEach((id) => {
       const el = document.getElementById(id);
-      if (el) el.style.display = "";
+      if (el) {
+        el.style.display = "";
+      }
     });
-
-    // Скрываем поля наставника
     mentorFields.forEach((id) => {
       const el = document.getElementById(id);
-      if (el) el.style.display = "none";
+      if (el) {
+        el.style.display = "none";
+      }
     });
   }
+
+  const attachBtn = document.getElementById("attachFileBtn");
+  if (attachBtn) attachBtn.style.display = "";
 }
 
 // ===== ЗАПОЛНЕНИЕ ФОРМЫ =====
 function fillForm() {
-  console.log("📝 [fillForm] currentTask:", currentTask);
-  console.log("📝 [fillForm] title:", currentTask?.title);
-  console.log("📝 [fillForm] status:", currentTask?.status);
-  console.log("📝 [fillForm] description:", currentTask?.description);
-
-  const titleInput = document.getElementById("taskTitle");
-  const statusSelect = document.getElementById("taskStatus");
-  const descTextarea = document.getElementById("taskDescription");
-
-  if (titleInput) titleInput.value = currentTask.title || "";
-  if (statusSelect) statusSelect.value = currentTask.status || "todo";
-  if (descTextarea) descTextarea.value = currentTask.description || "";
-
-  // 🔥 Для наставника делаем поля readOnly (видны, но нельзя менять)
-  if (currentUserRole === "mentor") {
-    if (titleInput) {
-      titleInput.readOnly = true;
-      titleInput.style.opacity = "0.8";
-      titleInput.style.cursor = "default";
-    }
-    if (statusSelect) {
-      statusSelect.disabled = true;
-      statusSelect.style.opacity = "0.8";
-      statusSelect.style.cursor = "default";
-    }
-    if (descTextarea) {
-      descTextarea.readOnly = true;
-      descTextarea.style.opacity = "0.8";
-      descTextarea.style.cursor = "default";
-    }
-  }
+  document.getElementById("taskTitle").value = currentTask.title || "";
+  document.getElementById("taskStatus").value = currentTask.status || "todo";
+  document.getElementById("taskDescription").value =
+    currentTask.description || "";
 }
 
 // ===== ФАЙЛЫ СТУДЕНТА =====
 function renderStudentFiles() {
   const list = document.getElementById("studentFilesList");
   list.innerHTML = "";
-
   const files = currentTask.studentFiles || [];
   if (files.length === 0) {
     list.innerHTML =
       '<div style="color:var(--text-muted); font-size:0.85rem; padding:0.5rem 0;">Файлы не загружены</div>';
     return;
   }
-
   files.forEach((file, idx) => {
     list.insertAdjacentHTML(
       "beforeend",
-      `
-      <div class="file-item">
-        <div class="file-info">
-          <span class="file-index">${idx + 1}.</span>
-          <span class="file-name">${file.name}</span>
-        </div>
-        <div class="file-actions">
-          <button class="file-action" data-action="delete-student" data-idx="${idx}" title="Удалить">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    `,
+      `<div class="file-item"><div class="file-info"><span class="file-index">${idx + 1}.</span><span class="file-name">${file.name}</span></div><div class="file-actions"><button class="file-action" data-action="delete-student" data-idx="${idx}" title="Удалить"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg></button></div></div>`,
     );
   });
-
   list.querySelectorAll('[data-action="delete-student"]').forEach((btn) => {
     btn.addEventListener("click", (e) => {
       const idx = Number(e.currentTarget.dataset.idx);
@@ -237,36 +186,18 @@ function renderMentorComment() {
 function renderMentorFiles() {
   const list = document.getElementById("mentorFilesList");
   list.innerHTML = "";
-
   const files = currentTask.mentorFiles || [];
   if (files.length === 0) {
     list.innerHTML =
       '<div style="color:var(--text-muted); font-size:0.85rem; padding:0.5rem 0;">Файлы не загружены</div>';
     return;
   }
-
   files.forEach((file, idx) => {
     list.insertAdjacentHTML(
       "beforeend",
-      `
-      <div class="file-item">
-        <div class="file-info">
-          <span class="file-index">${idx + 1}.</span>
-          <span class="file-name">${file.name}</span>
-        </div>
-        <div class="file-actions">
-          <button class="file-action" data-action="delete-mentor" data-idx="${idx}" title="Удалить">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    `,
+      `<div class="file-item"><div class="file-info"><span class="file-index">${idx + 1}.</span><span class="file-name">${file.name}</span></div><div class="file-actions"><button class="file-action" data-action="delete-mentor" data-idx="${idx}" title="Удалить"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg></button></div></div>`,
     );
   });
-
   list.querySelectorAll('[data-action="delete-mentor"]').forEach((btn) => {
     btn.addEventListener("click", (e) => {
       const idx = Number(e.currentTarget.dataset.idx);
@@ -281,7 +212,6 @@ function renderMentorFiles() {
 function renderSubtasks() {
   const container = document.getElementById("subtasksList");
   container.innerHTML = "";
-
   const subtasks = currentTask.subtasks || [];
   const done = subtasks.filter((s) => s.done).length;
   document.getElementById("subtasksTitle").textContent =
@@ -290,27 +220,29 @@ function renderSubtasks() {
   subtasks.forEach((subtask, idx) => {
     const label = document.createElement("label");
     label.className = "subtask" + (subtask.done ? " done" : "");
-    label.innerHTML = `
-      <input type="checkbox" class="subtask-checkbox" ${subtask.done ? "checked" : ""} data-idx="${idx}">
-      <span class="subtask-text">${subtask.text}</span>
-    `;
+    label.innerHTML = `<input type="checkbox" class="subtask-checkbox" ${
+      subtask.done ? "checked" : ""
+    } data-idx="${idx}"><span class="subtask-text">${subtask.text}</span>`;
     container.appendChild(label);
   });
 
-  const addBtn = document.createElement("button");
-  addBtn.className = "tag-add";
-  addBtn.textContent = "+";
-  addBtn.style.marginTop = "0.5rem";
-  addBtn.addEventListener("click", () => {
-    const text = prompt("Текст подзадачи:");
-    if (text && text.trim()) {
-      if (!currentTask.subtasks) currentTask.subtasks = [];
-      currentTask.subtasks.push({ text: text.trim(), done: false });
-      saveTask();
-      renderSubtasks();
-    }
-  });
-  container.appendChild(addBtn);
+  if (currentUserRole !== "mentor") {
+    const addBtn = document.createElement("button");
+    addBtn.className = "tag-add";
+    addBtn.id = "addSubtaskBtn";
+    addBtn.textContent = "+";
+    addBtn.style.marginTop = "0.5rem";
+    addBtn.addEventListener("click", () => {
+      const text = prompt("Текст подзадачи:");
+      if (text && text.trim()) {
+        if (!currentTask.subtasks) currentTask.subtasks = [];
+        currentTask.subtasks.push({ text: text.trim(), done: false });
+        saveTask();
+        renderSubtasks();
+      }
+    });
+    container.appendChild(addBtn);
+  }
 
   container.querySelectorAll(".subtask-checkbox").forEach((cb) => {
     cb.addEventListener("change", (e) => {
@@ -326,33 +258,21 @@ function renderSubtasks() {
 function renderActivity() {
   const container = document.getElementById("activityList");
   container.innerHTML = "";
-
   const activity = currentTask.activity || [];
   if (activity.length === 0) {
     container.innerHTML =
       '<div style="color:var(--text-muted); font-size:0.8rem;">Нет событий</div>';
     return;
   }
-
   activity.forEach((item) => {
     container.insertAdjacentHTML(
       "beforeend",
-      `
-      <div class="activity-item">
-        <span class="activity-icon">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10" />
-          </svg>
-        </span>
-        <span class="activity-text">${item.text}</span>
-        <span class="activity-time">${item.time}</span>
-      </div>
-    `,
+      `<div class="activity-item"><span class="activity-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /></svg></span><span class="activity-text">${item.text}</span><span class="activity-time">${item.time}</span></div>`,
     );
   });
 }
 
-// ===== ДЕТАЛИ =====
+// 🔥 ===== ДЕТАЛИ (СТУДЕНТЫ ВЫБИРАЮТ ОТВЕТСТВЕННОГО) =====
 function renderDetails() {
   const status = currentTask.status || "todo";
   const statusMap = {
@@ -373,11 +293,80 @@ function renderDetails() {
   document.getElementById("deadlineText").textContent =
     currentTask.dueDate || "Не указан";
 
-  const assignee = currentTask.assignee || "Не назначен";
-  const initial = assignee !== "Не назначен" ? assignee[0].toUpperCase() : "?";
-  document.getElementById("assigneeAvatar").textContent = initial;
-  document.getElementById("assigneeText").textContent = assignee;
+  // 🔥 ОТВЕТСТВЕННЫЙ — студенты видят select, наставник только текст
+  const assigneeContainer = document.getElementById("detailAssignee");
+  const isStudent = currentUserRole === "student";
 
+  if (isStudent && assigneeContainer) {
+    // Студент видит выпадающий список со всеми участниками
+    console.log("👥 Участники доски:", boardMembers);
+
+    let optionsHTML = '<option value="">Не назначен</option>';
+    boardMembers.forEach((member) => {
+      const selected =
+        currentTask.assigneeId === member.user_id ? "selected" : "";
+      const memberName = member.user_name || `Пользователь #${member.user_id}`;
+      optionsHTML += `<option value="${member.user_id}" ${selected}>${memberName}</option>`;
+    });
+
+    assigneeContainer.innerHTML = `
+      <select id="assigneeSelect" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); color: var(--text-primary, #e2e8f0); border: 1px solid var(--border-color, #334155); border-radius: 6px; font-size: 0.9rem; cursor: pointer;">
+        ${optionsHTML}
+      </select>
+    `;
+
+    // Обработчик изменения select
+    const select = document.getElementById("assigneeSelect");
+    if (select) {
+      select.addEventListener("change", async (e) => {
+        const newAssigneeId = e.target.value ? Number(e.target.value) : null;
+        console.log("🔄 Меняем ответственного на:", newAssigneeId);
+
+        currentTask.assigneeId = newAssigneeId;
+
+        // Загружаем имя ответственного
+        if (newAssigneeId) {
+          const member = boardMembers.find((m) => m.user_id === newAssigneeId);
+          currentTask.assignee = member?.user_name || "Пользователь";
+        } else {
+          currentTask.assignee = null;
+        }
+
+        saveTask();
+
+        // Отправляем на бэкенд
+        try {
+          const res = await fetch(`${API_URL}/api/tasks/${currentTask.id}`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${getToken()}`,
+            },
+            body: JSON.stringify({ assignee_id: newAssigneeId }),
+          });
+
+          if (!res.ok) {
+            console.error("Ошибка обновления:", await res.json());
+          } else {
+            console.log("✅ Ответственный обновлён в БД");
+          }
+        } catch (error) {
+          console.error("Ошибка сети:", error);
+        }
+      });
+    }
+  } else {
+    // Наставник видит текст (не может менять)
+    const assignee = currentTask.assignee || "Не назначен";
+    const initial =
+      assignee !== "Не назначен" ? assignee[0].toUpperCase() : "?";
+    assigneeContainer.innerHTML = `
+      <div class="avatar" id="assigneeAvatar" style="width: 24px; height: 24px; font-size: 0.65rem; background: #14b8a6; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center;">${initial}</div>
+      <span id="assigneeText" style="margin-left: 0.5rem;">${assignee}</span>
+    `;
+  }
+
+  // Теги
   const tagsContainer = document.getElementById("detailTags");
   tagsContainer.innerHTML = "";
   const tags = currentTask.tags || [];
@@ -388,23 +377,25 @@ function renderDetails() {
     );
   });
 
-  const addTagBtn = document.createElement("button");
-  addTagBtn.className = "tag-add";
-  addTagBtn.id = "addTagBtn";
-  addTagBtn.textContent = "+";
-  addTagBtn.addEventListener("click", () => {
-    const tag = prompt("Новый тег:");
-    if (tag && tag.trim()) {
-      if (!currentTask.tags) currentTask.tags = [];
-      currentTask.tags.push(tag.trim());
-      saveTask();
-      renderDetails();
-    }
-  });
-  tagsContainer.appendChild(addTagBtn);
+  // Наставник не может добавлять теги
+  if (currentUserRole !== "mentor") {
+    const addTagBtn = document.createElement("button");
+    addTagBtn.className = "tag-add";
+    addTagBtn.id = "addTagBtn";
+    addTagBtn.textContent = "+";
+    addTagBtn.addEventListener("click", () => {
+      const tag = prompt("Новый тег:");
+      if (tag && tag.trim()) {
+        if (!currentTask.tags) currentTask.tags = [];
+        currentTask.tags.push(tag.trim());
+        saveTask();
+        renderDetails();
+      }
+    });
+    tagsContainer.appendChild(addTagBtn);
+  }
 }
 
-// ===== ОБРАБОТЧИКИ ФОРМЫ =====
 // ===== ОБРАБОТЧИКИ ФОРМЫ =====
 function setupFormHandlers() {
   const titleInput = document.getElementById("taskTitle");
@@ -412,29 +403,8 @@ function setupFormHandlers() {
   const descTextarea = document.getElementById("taskDescription");
   const mentorComment = document.getElementById("mentorComment");
 
-  // 🔥 Делаем поля readOnly для наставника
-  const isMentor = currentUserRole === "mentor";
-
-  if (isMentor) {
-    if (titleInput) {
-      titleInput.readOnly = true;
-      titleInput.style.background = "rgba(255,255,255,0.02)";
-      titleInput.style.cursor = "not-allowed";
-    }
-    if (statusSelect) {
-      statusSelect.disabled = true;
-      statusSelect.style.background = "rgba(255,255,255,0.02)";
-      statusSelect.style.cursor = "not-allowed";
-    }
-    if (descTextarea) {
-      descTextarea.readOnly = true;
-      descTextarea.style.background = "rgba(255,255,255,0.02)";
-      descTextarea.style.cursor = "not-allowed";
-    }
-  }
-
   [titleInput, statusSelect, descTextarea, mentorComment].forEach((el) => {
-    if (el && !el.readOnly && !el.disabled) {
+    if (el) {
       el.addEventListener("change", () => {
         currentTask.title = titleInput.value;
         currentTask.status = statusSelect.value;
@@ -446,42 +416,13 @@ function setupFormHandlers() {
     }
   });
 
-  document.getElementById("submitBtn")?.addEventListener("click", async () => {
+  document.getElementById("submitBtn")?.addEventListener("click", () => {
     currentTask.status = "review";
     statusSelect.value = "review";
     addActivity("Задача отправлена на проверку");
     saveTask();
-
-    // 🔥 ОТПРАВЛЯЕМ НА БЭКЕНД
-    try {
-      const res = await fetch(`${API_URL}/api/tasks/${currentTask.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getToken()}`,
-        },
-        body: JSON.stringify({ status: "review" }),
-      });
-
-      if (!res.ok) {
-        console.error("Ошибка обновления статуса:", await res.json());
-      } else {
-        console.log("✅ Статус обновлён на review");
-      }
-    } catch (error) {
-      console.error("Ошибка сети:", error);
-    }
-
     renderDetails();
     applyRoleBasedUI();
-
-    // 🔥 Показываем уведомление и возвращаемся на доску
-    showToast("Задача отправлена на проверку", "success");
-    setTimeout(() => {
-      if (currentBoardId) {
-        window.location.href = `mainboard.html?boardId=${currentBoardId}`;
-      }
-    }, 1000);
   });
 
   document.getElementById("attachFileBtn")?.addEventListener("click", () => {
@@ -518,7 +459,7 @@ function setupCheckButtons() {
     addActivity("Задача принята наставником");
     saveTask();
 
-    // 🔥 Отправляем на бэкенд
+    // Отправляем на бэкенд
     try {
       const res = await fetch(`${API_URL}/api/tasks/${currentTask.id}`, {
         method: "PUT",
@@ -548,7 +489,7 @@ function setupCheckButtons() {
     addActivity("Задача возвращена на доработку");
     saveTask();
 
-    // 🔥 Отправляем на бэкенд
+    // Отправляем на бэкенд
     try {
       const res = await fetch(`${API_URL}/api/tasks/${currentTask.id}`, {
         method: "PUT",

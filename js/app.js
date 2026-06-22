@@ -1,15 +1,18 @@
 import { checkAuth } from "./api/auth.js";
 import { storage } from "./utils/storage.js";
 
+const API_URL = "http://localhost:3000";
+
 document.addEventListener("DOMContentLoaded", () => {
   checkAuth();
-  updateSidebar();
+  updateSidebar(); // 🔥 Теперь async, но вызываем без await
   setupSmartBoardLink();
   setupLogoutButton();
-  highlightNav(); // 🔥 Добавляем вызов подсветки
+  highlightNav();
 });
 
-function updateSidebar() {
+// ===== ОБНОВЛЕНИЕ САЙДБАРА С РЕАЛЬНОЙ РОЛЬЮ =====
+async function updateSidebar() {
   const user = storage.getCurrentUser();
   if (!user) return;
 
@@ -17,46 +20,60 @@ function updateSidebar() {
   const roleEl = document.querySelector(".user-info .roles");
 
   if (nameEl) nameEl.textContent = user.name;
-  if (roleEl)
-    roleEl.textContent = user.role === "admin" ? "Администратор" : "Наставник";
+
+  // Получаем boardId из URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const boardId = urlParams.get("boardId");
+
+  if (boardId) {
+    // 🔥 Загружаем реальную роль на доске через API
+    try {
+      const token = localStorage.getItem("imctech_token");
+      const res = await fetch(`${API_URL}/api/boards/${boardId}/members`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        const members = await res.json();
+        const member = members.find((m) => m.user_id === user.id);
+
+        if (member) {
+          const roleLabel = member.role === "mentor" ? "Наставник" : "Студент";
+          const statusLabel =
+            member.status === "admin" ? " · Админ" : " · Участник";
+
+          if (roleEl) roleEl.textContent = roleLabel + statusLabel;
+          console.log(`✅ Роль на доске: ${roleLabel}${statusLabel}`);
+          return;
+        }
+      }
+    } catch (error) {
+      console.warn("Не удалось загрузить роль с доски:", error);
+    }
+  }
+
+  // Если нет boardId или ошибка — показываем дефолтную роль
+  if (roleEl) {
+    roleEl.textContent = "Пользователь";
+  }
 }
 
 // ===== ПОДСВЕТКА АКТИВНОГО ПУНКТА =====
 function highlightNav() {
   const currentPage = window.location.pathname.split("/").pop();
-  const urlParams = new URLSearchParams(window.location.search);
-  const boardId = urlParams.get("boardId");
+
+  document.querySelectorAll(".nav-item").forEach((item) => {
+    item.classList.remove("active");
+  });
 
   document.querySelectorAll(".nav-item a").forEach((link) => {
-    const href = link.getAttribute("href");
-    const navItem = link.closest(".nav-item");
+    const href = (link.getAttribute("href") || "")
+      .split("?")[0]
+      .split("/")
+      .pop();
 
-    // Сбрасываем все active
-    navItem.classList.remove("active");
-
-    // Особая логика для "Доска" — активна если мы на mainboard.html
-    if (link.textContent.trim() === "Доска") {
-      if (currentPage === "mainboard.html") {
-        navItem.classList.add("active");
-      }
-    }
-    // Для "Мои доски" — активна если на dashboard.html
-    else if (link.textContent.trim() === "Мои доски") {
-      if (currentPage === "dashboard.html") {
-        navItem.classList.add("active");
-      }
-    }
-    // 🔥 Для "Результаты" — активна если на results.html
-    else if (link.textContent.trim() === "Результаты") {
-      if (currentPage === "results.html") {
-        navItem.classList.add("active");
-      }
-    }
-    // 🔥 Для "Настройки" — активна если на settings.html
-    else if (link.textContent.trim() === "Настройки") {
-      if (currentPage === "settings.html") {
-        navItem.classList.add("active");
-      }
+    if (href === currentPage) {
+      link.closest(".nav-item").classList.add("active");
     }
   });
 }
@@ -64,15 +81,11 @@ function highlightNav() {
 // ===== УМНАЯ ССЫЛКА "ДОСКА" =====
 function setupSmartBoardLink() {
   const lastBoardId = localStorage.getItem("imctech_last_board_id");
-
-  // Находим ссылку "Доска" по тексту, а не по href!
   document.querySelectorAll(".nav-item a").forEach((link) => {
     if (link.textContent.trim() === "Доска") {
-      // Если есть последняя доска — ведём на неё
       if (lastBoardId) {
         link.href = `mainboard.html?boardId=${lastBoardId}`;
       } else {
-        // Иначе ведём на dashboard (чтобы выбрать доску)
         link.href = "dashboard.html";
       }
     }
@@ -84,7 +97,6 @@ function setupLogoutButton() {
   const profile = document.querySelector(".user-profile");
   if (!profile || document.getElementById("logout-btn")) return;
 
-  // Динамически вставляем стили
   if (!document.getElementById("logout-styles")) {
     const style = document.createElement("style");
     style.id = "logout-styles";
@@ -99,6 +111,5 @@ function setupLogoutButton() {
     storage.clearCurrentUser();
     window.location.href = "login.html";
   });
-
   profile.appendChild(btn);
 }

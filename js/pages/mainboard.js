@@ -29,6 +29,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       }
     });
+
+    // 7. НАСТРОЙКА ПОИСКА
+    setupTaskSearch();
   }
 
   // 2. ИНИЦИАЛИЗАЦИЯ ДОСКИ
@@ -518,4 +521,38 @@ if (!document.getElementById("toast-styles")) {
   style.id = "toast-styles";
   style.textContent = `@keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } } @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(400px); opacity: 0; } }`;
   document.head.appendChild(style);
+}
+
+// ===== ПОИСК ПО ЗАДАЧАМ =====
+function setupTaskSearch() {
+  const searchInput = document.getElementById("taskSearch");
+  if (!searchInput) return;
+
+  searchInput.addEventListener("input", (e) => {
+    const searchTerm = e.target.value.toLowerCase().trim();
+    filterTasks(searchTerm);
+  });
+}
+
+function filterTasks(searchTerm) {
+  const allCards = document.querySelectorAll(".task-card");
+
+  allCards.forEach((card) => {
+    const title =
+      card.querySelector(".task-title")?.textContent.toLowerCase() || "";
+    const description =
+      card.querySelector(".task-description")?.textContent.toLowerCase() || "";
+    const tags =
+      card.querySelector(".task-tags")?.textContent.toLowerCase() || "";
+
+    const matchesTitle = title.includes(searchTerm);
+    const matchesDescription = description.includes(searchTerm);
+    const matchesTags = tags.includes(searchTerm);
+
+    if (matchesTitle || matchesDescription || matchesTags) {
+      card.style.display = "";
+    } else {
+      card.style.display = "none";
+    }
+  });
 }
