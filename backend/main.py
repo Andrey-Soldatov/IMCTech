@@ -11,6 +11,9 @@ from schemas import (
     BoardMemberCreate, BoardMemberResponse, BoardMemberUpdate
 )
 from auth import get_password_hash, verify_password, create_access_token, get_current_user
+from fastapi import Request
+from fastapi.responses import RedirectResponse
+import httpx
 
 Base.metadata.create_all(bind=engine)
 
@@ -18,7 +21,7 @@ app = FastAPI(title="IMCTech API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:8080", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -316,3 +319,114 @@ def search_users(email: str = None, name: str = None, current_user: User = Depen
     
     users = query.limit(10).all()
     return [{"id": u.id, "name": u.name, "email": u.email} for u in users]
+
+
+
+
+
+
+
+
+YANDEX_CLIENT_ID = "c48d5ae1cd584e3090a75909360980d6"
+YANDEX_CLIENT_SECRET = "bafc593d80da4573baf7c05e47776269"
+YANDEX_REDIRECT_URI = "http://localhost:3000/api/auth/yandex/callback"
+YANDEX_AUTH_URL = "https://oauth.yandex.ru/authorize"
+YANDEX_TOKEN_URL = "https://oauth.yandex.ru/token"
+YANDEX_USER_INFO_URL = "https://login.yandex.ru/info"
+
+@app.get("/api/auth/yandex")
+def yandex_login():
+    """Перенаправление на Яндекс OAuth"""
+    auth_url = (
+        f"{YANDEX_AUTH_URL}?"
+        f"response_type=code&"
+        f"client_id={YANDEX_CLIENT_ID}&"
+        f"redirect_uri={YANDEX_REDIRECT_URI}&"
+        f"scope=login:email"
+    )
+    return RedirectResponse(url=auth_url)
+
+@app.get("/api/auth/yandex/callback")
+async def yandex_callback(request: Request, db: Session = Depends(get_db)):
+    """Callback от Яндекса"""
+    code = request.query_params.get("code")
+    
+    if not code:
+        raise HTTPException(status_code=400, detail="Нет кода авторизации")
+    
+    # Обмениваем код на токен
+    async with httpx.AsyncClient() as client:
+        token_response = await client.post(
+            YANDEX_TOKEN_URL,
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": YANDEX_CLIENT_ID,
+                "client_secret": YANDEX_CLIENT_SECRET,
+                "redirect_uri": YANDEX_REDIRECT_URI,
+            }
+        )
+        
+        if token_response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Ошибка получения токена Яндекса")
+        
+        token_data = token_response.json()
+        access_token = token_data.get("access_token")
+        
+        # Получаем данные пользователя
+        user_response = await client.get(
+            YANDEX_USER_INFO_URL,
+            headers={"Authorization": f"OAuth {access_token}"}
+        )
+        
+        if user_response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Ошибка получения данных пользователя")
+        
+        yandex_user = user_response.json()
+        email = yandex_user.get("default_email")
+
+        # 🔥 Получаем имя от Яндекса
+        first_name = yandex_user.get("first_name", "")
+        last_name = yandex_user.get("last_name", "")
+        display_name = yandex_user.get("display_name", "")
+
+        # Формируем имя
+        if first_name and last_name:
+            name = f"{first_name} {last_name}"
+        elif first_name:
+            name = first_name
+        elif display_name:
+            name = display_name
+        elif email:
+            # Берём первые 5 символов email до @
+            name = email.split("@")[0][:5]
+        else:
+            name = "Пользователь"
+
+        print(f"👤 Имя: {name}, Email: {email}")
+        
+        if not email:
+            raise HTTPException(status_code=400, detail="Яндекс не вернул email")
+        
+        # Проверяем есть ли пользователь
+        db_user = db.query(User).filter(User.email == email).first()
+        
+        if not db_user:
+            # Создаём нового пользователя
+            db_user = User(
+                name=name,
+                email=email,
+                hashed_password="",  # Для OAuth пароль не нужен
+                role="student"
+            )
+            db.add(db_user)
+            db.commit()
+            db.refresh(db_user)
+        
+        # Создаём JWT токен
+        jwt_token = create_access_token(data={"sub": db_user.id})
+        
+        # Редирект на фронтенд с токеном
+        return RedirectResponse(
+            url=f"http://localhost:8080/pages/login.html?token={jwt_token}&oauth=yandex"
+        )

@@ -298,11 +298,12 @@ function renderDetails() {
   const isStudent = currentUserRole === "student";
 
   if (isStudent && assigneeContainer) {
-    // Студент видит выпадающий список со всеми участниками
-    console.log("👥 Участники доски:", boardMembers);
+    // 🔥 Студент видит выпадающий список ТОЛЬКО со студентами
+    const students = boardMembers.filter((m) => m.role === "student");
+    console.log("👨‍🎓 Студенты на доске:", students);
 
     let optionsHTML = '<option value="">Не назначен</option>';
-    boardMembers.forEach((member) => {
+    students.forEach((member) => {
       const selected =
         currentTask.assigneeId === member.user_id ? "selected" : "";
       const memberName = member.user_name || `Пользователь #${member.user_id}`;
@@ -310,7 +311,7 @@ function renderDetails() {
     });
 
     assigneeContainer.innerHTML = `
-      <select id="assigneeSelect" style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); color: var(--text-primary, #e2e8f0); border: 1px solid var(--border-color, #334155); border-radius: 6px; font-size: 0.9rem; cursor: pointer;">
+      <select id="assigneeSelect" style="width: 100%; padding: 0.5rem; background: rgba(30, 41, 59, 0.9); color: var(--text-primary, #e2e8f0); border: 1px solid var(--border-color, #334155); border-radius: 6px; font-size: 0.9rem; cursor: pointer;">
         ${optionsHTML}
       </select>
     `;

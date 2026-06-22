@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 
+
 SECRET_KEY = "твой-секретный-ключ-замени-на-свой-очень-длинный"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
@@ -51,3 +52,4 @@ def get_current_user(
         raise HTTPException(status_code=404, detail="Пользователь не найден")
     
     return user
+

@@ -1,79 +1,67 @@
 import { checkAuth } from "./api/auth.js";
 import { storage } from "./utils/storage.js";
 
-const API_URL = "http://localhost:3000";
-
 document.addEventListener("DOMContentLoaded", () => {
   checkAuth();
-  updateSidebar(); // 🔥 Теперь async, но вызываем без await
+  updateSidebar();
   setupSmartBoardLink();
   setupLogoutButton();
   highlightNav();
 });
 
-// ===== ОБНОВЛЕНИЕ САЙДБАРА С РЕАЛЬНОЙ РОЛЬЮ =====
-async function updateSidebar() {
+function updateSidebar() {
   const user = storage.getCurrentUser();
   if (!user) return;
 
   const nameEl = document.querySelector(".user-info .name");
   const roleEl = document.querySelector(".user-info .roles");
 
-  if (nameEl) nameEl.textContent = user.name;
+  // 🔥 Обрезаем имя до 5 символов
+  if (nameEl) {
+    let displayName = user.name || "";
 
-  // Получаем boardId из URL
-  const urlParams = new URLSearchParams(window.location.search);
-  const boardId = urlParams.get("boardId");
-
-  if (boardId) {
-    // 🔥 Загружаем реальную роль на доске через API
-    try {
-      const token = localStorage.getItem("imctech_token");
-      const res = await fetch(`${API_URL}/api/boards/${boardId}/members`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (res.ok) {
-        const members = await res.json();
-        const member = members.find((m) => m.user_id === user.id);
-
-        if (member) {
-          const roleLabel = member.role === "mentor" ? "Наставник" : "Студент";
-          const statusLabel =
-            member.status === "admin" ? " · Админ" : " · Участник";
-
-          if (roleEl) roleEl.textContent = roleLabel + statusLabel;
-          console.log(`✅ Роль на доске: ${roleLabel}${statusLabel}`);
-          return;
-        }
-      }
-    } catch (error) {
-      console.warn("Не удалось загрузить роль с доски:", error);
+    // Если имя содержит @ (email) — берём часть до @
+    if (displayName.includes("@")) {
+      displayName = displayName.split("@")[0];
     }
+
+    // Обрезаем до 5 символов
+    displayName = displayName.substring(0, 5);
+
+    nameEl.textContent = displayName;
   }
 
-  // Если нет boardId или ошибка — показываем дефолтную роль
-  if (roleEl) {
-    roleEl.textContent = "Пользователь";
-  }
+  if (roleEl)
+    roleEl.textContent = user.role === "admin" ? "Администратор" : "Наставник";
 }
 
 // ===== ПОДСВЕТКА АКТИВНОГО ПУНКТА =====
 function highlightNav() {
   const currentPage = window.location.pathname.split("/").pop();
-
-  document.querySelectorAll(".nav-item").forEach((item) => {
-    item.classList.remove("active");
-  });
+  const urlParams = new URLSearchParams(window.location.search);
+  const boardId = urlParams.get("boardId");
 
   document.querySelectorAll(".nav-item a").forEach((link) => {
-    const href = (link.getAttribute("href") || "")
-      .split("?")[0]
-      .split("/")
-      .pop();
+    const href = link.getAttribute("href");
+    const navItem = link.closest(".nav-item");
+    navItem.classList.remove("active");
 
-    if (href === currentPage) {
-      link.closest(".nav-item").classList.add("active");
+    if (link.textContent.trim() === "Доска") {
+      if (currentPage === "mainboard.html") {
+        navItem.classList.add("active");
+      }
+    } else if (link.textContent.trim() === "Мои доски") {
+      if (currentPage === "dashboard.html") {
+        navItem.classList.add("active");
+      }
+    } else if (link.textContent.trim() === "Результаты") {
+      if (currentPage === "results.html") {
+        navItem.classList.add("active");
+      }
+    } else if (link.textContent.trim() === "Настройки") {
+      if (currentPage === "settings.html") {
+        navItem.classList.add("active");
+      }
     }
   });
 }

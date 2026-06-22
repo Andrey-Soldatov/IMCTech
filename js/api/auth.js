@@ -96,3 +96,8 @@ export function logout() {
   storage.clearCurrentUser();
   window.location.href = "login.html";
 }
+
+// ===== YANDEX OAUTH =====
+export function yandexLogin() {
+  window.location.href = `${API_URL}/api/auth/yandex`;
+}

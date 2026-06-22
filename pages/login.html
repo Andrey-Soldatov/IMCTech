@@ -16,8 +16,13 @@
       <h1>Войдите в аккаунт</h1>
       <p class="subtitle">Для доступа к проектной доске ДВФУ</p>
 
-      <button class="social-btn">
-        <span class="icon-yandex">Я</span>
+      <button class="oauth-btn yandex" onclick="handleYandexLogin()">
+        <svg viewBox="0 0 24 24" width="20" height="20">
+          <path
+            fill="currentColor"
+            d="M19.8 10.2L14.4 21.8H9.6L15 10.2H9.6V6.2H19.8V10.2ZM4.2 21.8H0V2.2H4.2V21.8Z"
+          />
+        </svg>
         Войти через Яндекс
       </button>
 
@@ -75,6 +80,60 @@
             ? (window.location.href = "dashboard.html")
             : alert(res.error);
         });
+    </script>
+    <script>
+      function handleYandexLogin() {
+        // Перенаправляем на бэкенд для OAuth
+        window.location.href = "http://localhost:3000/api/auth/yandex";
+      }
+
+      // Обработка callback от OAuth
+      window.addEventListener("DOMContentLoaded", async () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get("token");
+        const oauth = urlParams.get("oauth");
+
+        if (token && oauth === "yandex") {
+          console.log("🔑 Получен токен от Яндекса");
+
+          try {
+            // Сохраняем токен
+            localStorage.setItem("imctech_token", token);
+
+            // Получаем данные пользователя
+            const meRes = await fetch("http://localhost:3000/api/auth/me", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+
+            if (meRes.ok) {
+              const user = await meRes.json();
+              localStorage.setItem(
+                "imctech_current_user",
+                JSON.stringify(user),
+              );
+              console.log("✅ Пользователь сохранён:", user);
+
+              // Удаляем параметры из URL
+              window.history.replaceState(
+                {},
+                document.title,
+                window.location.pathname,
+              );
+
+              // 🔥 Перенаправляем на dashboard (с правильным путём!)
+              setTimeout(() => {
+                window.location.href = "dashboard.html";
+              }, 500);
+            } else {
+              console.error("❌ Ошибка получения данных пользователя");
+              alert("Ошибка входа: не удалось получить данные пользователя");
+            }
+          } catch (error) {
+            console.error("❌ Ошибка:", error);
+            alert("Ошибка входа через Яндекс");
+          }
+        }
+      });
     </script>
   </body>
 </html>
