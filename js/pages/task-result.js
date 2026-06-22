@@ -3,11 +3,8 @@ import { storage } from "../utils/storage.js";
 const API_URL = "http://localhost:3000";
 let currentTask = null;
 let currentBoardId = null;
-let currentUserRole = "student"; // student или mentor
-let currentUserStatus = "participant"; // participant или admin
-
-console.log("👤 Текущая роль:", currentUserRole);
-console.log("📊 Текущий статус:", currentUserStatus);
+let currentUserRole = "student"; // student или mentor — это ТОЛЬКО начальное значение до загрузки
+let currentUserStatus = "participant"; // participant или admin — это ТОЛЬКО начальное значение до загрузки
 
 function getToken() {
   return localStorage.getItem("imctech_token");
@@ -56,20 +53,49 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 // ===== ОПРЕДЕЛЕНИЕ РОЛИ =====
 async function detectUserRole() {
-  if (!currentBoardId) return;
+  console.log("🔍 [detectUserRole] currentBoardId =", currentBoardId);
+
+  if (!currentBoardId) {
+    console.warn(
+      "🔍 [detectUserRole] нет currentBoardId — остаюсь student по умолчанию",
+    );
+    return;
+  }
+
   try {
     const res = await fetch(`${API_URL}/api/boards/${currentBoardId}/members`, {
       headers: { Authorization: `Bearer ${getToken()}` },
     });
-    if (!res.ok) return;
+
+    console.log("🔍 [detectUserRole] ответ /members:", res.status);
+
+    if (!res.ok) {
+      console.warn(
+        `🔍 [detectUserRole] запрос участников провалился (HTTP ${res.status}) — остаюсь student по умолчанию`,
+      );
+      return;
+    }
 
     const members = await res.json();
     const currentUser = storage.getCurrentUser();
+
+    console.log("🔍 [detectUserRole] currentUser.id =", currentUser?.id);
+    console.log("🔍 [detectUserRole] участники доски:", members);
+
     const member = members.find((m) => m.user_id === currentUser?.id);
 
     if (member) {
       currentUserRole = member.role || "student";
       currentUserStatus = member.status || "participant";
+      console.log(
+        `✅ [detectUserRole] найден как участник: role=${currentUserRole}, status=${currentUserStatus}`,
+      );
+    } else {
+      console.warn(
+        "⚠️ [detectUserRole] currentUser.id НЕ найден в списке участников доски — остаюсь student/participant по умолчанию. Проверь, что ты реально привязан как участник к этой доске (board_id =",
+        currentBoardId,
+        ")",
+      );
     }
   } catch (error) {
     console.warn(
@@ -85,62 +111,76 @@ function applyRoleBasedUI() {
 
   const isMentor = currentUserRole === "mentor";
 
-  // Поля редактирования (для студента)
-  const studentFields = [
-    "taskTitle",
-    "taskStatus",
-    "taskDescription",
-    "submitBtn",
-    "attachFileBtn",
-  ];
+  // 🔥 Наставник ВИДИТ поля студента (readOnly), но не может отправлять на проверку
+  const studentOnlyFields = ["submitBtn"];
 
   // Поля наставника
   const mentorFields = ["mentorComment", "checkSection"];
 
   if (isMentor) {
-    // Наставник: скрываем поля студента
-    studentFields.forEach((id) => {
+    // Скрываем только кнопку "Отправить на проверку"
+    studentOnlyFields.forEach((id) => {
       const el = document.getElementById(id);
-      if (el) {
-        el.style.display = "none";
-        console.log("🚫 Скрыл:", id);
-      }
+      if (el) el.style.display = "none";
     });
 
     // Показываем поля наставника
     mentorFields.forEach((id) => {
       const el = document.getElementById(id);
-      if (el) {
-        el.style.display = "";
-        console.log("✅ Показал:", id);
-      }
-    });
-  } else {
-    // Студент: показываем свои поля, скрываем наставника
-    studentFields.forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.style.display = "";
-        console.log("✅ Показал:", id);
-      }
+      if (el) el.style.display = "";
     });
 
+    // 🔥 Показываем кнопку прикрепления файла наставнику
+    const attachBtn = document.getElementById("attachFileBtn");
+    if (attachBtn) attachBtn.style.display = "";
+  } else {
+    // Студент: показываем всё своё
+    studentOnlyFields.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = "";
+    });
+
+    // Скрываем поля наставника
     mentorFields.forEach((id) => {
       const el = document.getElementById(id);
-      if (el) {
-        el.style.display = "none";
-        console.log("🚫 Скрыл:", id);
-      }
+      if (el) el.style.display = "none";
     });
   }
 }
 
 // ===== ЗАПОЛНЕНИЕ ФОРМЫ =====
 function fillForm() {
-  document.getElementById("taskTitle").value = currentTask.title || "";
-  document.getElementById("taskStatus").value = currentTask.status || "todo";
-  document.getElementById("taskDescription").value =
-    currentTask.description || "";
+  console.log("📝 [fillForm] currentTask:", currentTask);
+  console.log("📝 [fillForm] title:", currentTask?.title);
+  console.log("📝 [fillForm] status:", currentTask?.status);
+  console.log("📝 [fillForm] description:", currentTask?.description);
+
+  const titleInput = document.getElementById("taskTitle");
+  const statusSelect = document.getElementById("taskStatus");
+  const descTextarea = document.getElementById("taskDescription");
+
+  if (titleInput) titleInput.value = currentTask.title || "";
+  if (statusSelect) statusSelect.value = currentTask.status || "todo";
+  if (descTextarea) descTextarea.value = currentTask.description || "";
+
+  // 🔥 Для наставника делаем поля readOnly (видны, но нельзя менять)
+  if (currentUserRole === "mentor") {
+    if (titleInput) {
+      titleInput.readOnly = true;
+      titleInput.style.opacity = "0.8";
+      titleInput.style.cursor = "default";
+    }
+    if (statusSelect) {
+      statusSelect.disabled = true;
+      statusSelect.style.opacity = "0.8";
+      statusSelect.style.cursor = "default";
+    }
+    if (descTextarea) {
+      descTextarea.readOnly = true;
+      descTextarea.style.opacity = "0.8";
+      descTextarea.style.cursor = "default";
+    }
+  }
 }
 
 // ===== ФАЙЛЫ СТУДЕНТА =====
@@ -365,14 +405,36 @@ function renderDetails() {
 }
 
 // ===== ОБРАБОТЧИКИ ФОРМЫ =====
+// ===== ОБРАБОТЧИКИ ФОРМЫ =====
 function setupFormHandlers() {
   const titleInput = document.getElementById("taskTitle");
   const statusSelect = document.getElementById("taskStatus");
   const descTextarea = document.getElementById("taskDescription");
   const mentorComment = document.getElementById("mentorComment");
 
+  // 🔥 Делаем поля readOnly для наставника
+  const isMentor = currentUserRole === "mentor";
+
+  if (isMentor) {
+    if (titleInput) {
+      titleInput.readOnly = true;
+      titleInput.style.background = "rgba(255,255,255,0.02)";
+      titleInput.style.cursor = "not-allowed";
+    }
+    if (statusSelect) {
+      statusSelect.disabled = true;
+      statusSelect.style.background = "rgba(255,255,255,0.02)";
+      statusSelect.style.cursor = "not-allowed";
+    }
+    if (descTextarea) {
+      descTextarea.readOnly = true;
+      descTextarea.style.background = "rgba(255,255,255,0.02)";
+      descTextarea.style.cursor = "not-allowed";
+    }
+  }
+
   [titleInput, statusSelect, descTextarea, mentorComment].forEach((el) => {
-    if (el) {
+    if (el && !el.readOnly && !el.disabled) {
       el.addEventListener("change", () => {
         currentTask.title = titleInput.value;
         currentTask.status = statusSelect.value;
@@ -390,19 +452,30 @@ function setupFormHandlers() {
     addActivity("Задача отправлена на проверку");
     saveTask();
     renderDetails();
-    applyRoleBasedUI(); // Обновляем UI после смены статуса
+    applyRoleBasedUI();
   });
 
   document.getElementById("attachFileBtn")?.addEventListener("click", () => {
     const fileName = prompt("Имя файла (например, code.py):");
-    if (fileName && fileName.trim()) {
-      if (!currentTask.studentFiles) currentTask.studentFiles = [];
-      currentTask.studentFiles.push({
-        name: fileName.trim(),
-        uploadedAt: new Date().toISOString(),
-      });
-      addActivity(`Загружен файл: ${fileName.trim()}`);
-      saveTask();
+    if (!fileName || !fileName.trim()) return;
+
+    const isMentor = currentUserRole === "mentor";
+    const targetList = isMentor ? "mentorFiles" : "studentFiles";
+
+    if (!currentTask[targetList]) currentTask[targetList] = [];
+    currentTask[targetList].push({
+      name: fileName.trim(),
+      uploadedAt: new Date().toISOString(),
+    });
+
+    addActivity(
+      `Загружен файл${isMentor ? " наставником" : ""}: ${fileName.trim()}`,
+    );
+    saveTask();
+
+    if (isMentor) {
+      renderMentorFiles();
+    } else {
       renderStudentFiles();
     }
   });

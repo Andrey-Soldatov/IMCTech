@@ -2,6 +2,7 @@ import { storage } from "../utils/storage.js";
 
 const API_URL = "http://localhost:3000";
 let currentBoardId = null;
+let currentUserRole = "student"; // 🔥 По умолчанию student
 
 function getToken() {
   return localStorage.getItem("imctech_token");
@@ -12,7 +13,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 1. ЖЕСТКАЯ ФИКСАЦИЯ ССЫЛОК САЙДБАРА
   const urlParams = new URLSearchParams(window.location.search);
   const boardIdFromUrl = urlParams.get("boardId");
-
   if (boardIdFromUrl) {
     document.querySelectorAll(".sidebar a").forEach((link) => {
       const href = link.getAttribute("href");
@@ -22,7 +22,6 @@ document.addEventListener("DOMContentLoaded", async () => {
           href.includes("results.html") ||
           href.includes("settings.html")
         ) {
-          // Парсим href чтобы не дублировать boardId
           const [base, query] = href.split("?");
           const params = new URLSearchParams(query || "");
           params.set("boardId", boardIdFromUrl);
@@ -34,48 +33,73 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 2. ИНИЦИАЛИЗАЦИЯ ДОСКИ
   currentBoardId = Number(boardIdFromUrl);
-
   if (!currentBoardId) {
     window.location.href = "dashboard.html";
     return;
   }
 
-  // Сохраняем ID последней открытой доски
   localStorage.setItem("imctech_last_board_id", currentBoardId);
 
-  // Обновляем заголовок из localStorage
   const board = storage.getBoards().find((b) => b.id === currentBoardId);
   const titleEl = document.querySelector(".breadcrumbs .current");
   if (titleEl && board) titleEl.textContent = board.name;
 
-  // 3. ЗАГРУЗКА И РЕНДЕРИНГ ЗАДАЧ
+  // 🔥 3. ОПРЕДЕЛЯЕМ РОЛЬ ПОЛЬЗОВАТЕЛЯ
+  await detectUserRole();
+  console.log("🎭 Роль пользователя:", currentUserRole);
+
+  // 4. ЗАГРУЗКА И РЕНДЕРИНГ ЗАДАЧ
   await loadAndRenderTasks();
 
-  // 4. НАСТРОЙКА DRAG-AND-DROP
+  // 5. НАСТРОЙКА DRAG-AND-DROP
   setupDragAndDrop();
 
-  // 5. ОБРАБОТЧИКИ КНОПОК "ДОБАВИТЬ ЗАДАЧУ"
-  document.querySelectorAll(".add-task-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const column = btn.closest(".column");
-      const status = getStatusFromColumn(column);
-      openTaskModal(null, currentBoardId, status);
-    });
+  // 🔥 6. ОБРАБОТЧИКИ КНОПОК "ДОБАВИТЬ ЗАДАЧУ" — ТОЛЬКО ДЛЯ СТУДЕНТОВ!
+  const addTaskButtons = document.querySelectorAll(".add-task-btn");
+  addTaskButtons.forEach((btn) => {
+    if (currentUserRole === "mentor") {
+      // 🔥 СКРЫВАЕМ КНОПКИ ДЛЯ НАСТАВНИКА
+      btn.style.display = "none";
+      console.log("🚫 Кнопка добавления задачи скрыта для наставника");
+    } else {
+      btn.addEventListener("click", () => {
+        const column = btn.closest(".column");
+        const status = getStatusFromColumn(column);
+        openTaskModal(null, currentBoardId, status);
+      });
+    }
   });
 
-  // 6. НАСТРОЙКА МОДАЛЬНОГО ОКНА
+  // 7. НАСТРОЙКА МОДАЛЬНОГО ОКНА
   setupModalHandlers();
 });
+
+// 🔥 ===== ОПРЕДЕЛЕНИЕ РОЛИ =====
+async function detectUserRole() {
+  if (!currentBoardId) return;
+  try {
+    const res = await fetch(`${API_URL}/api/boards/${currentBoardId}/members`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    if (!res.ok) return;
+    const members = await res.json();
+    const currentUser = storage.getCurrentUser();
+    const member = members.find((m) => m.user_id === currentUser?.id);
+
+    if (member) {
+      currentUserRole = member.role || "student";
+    }
+  } catch (error) {
+    console.warn("Не удалось определить роль:", error);
+  }
+}
 
 // ===== ЗАГРУЗКА ЗАДАЧ ЧЕРЕЗ API =====
 async function loadAndRenderTasks() {
   try {
     const res = await fetch(`${API_URL}/api/boards/${currentBoardId}/tasks`, {
-      headers: {
-        Authorization: `Bearer ${getToken()}`,
-      },
+      headers: { Authorization: `Bearer ${getToken()}` },
     });
-
     if (!res.ok) {
       if (res.status === 401) {
         localStorage.removeItem("imctech_token");
@@ -148,6 +172,7 @@ function createTaskCard(task) {
   card.className = "task-card";
   card.draggable = true;
   card.dataset.taskId = task.id;
+
   card.innerHTML = `
     <div class="task-tags">
       ${task.tags ? task.tags.map((tag) => `<span class="task-tag">${tag}</span>`).join("") : ""}
@@ -163,7 +188,7 @@ function createTaskCard(task) {
       </div>
       <div class="task-actions">
         <span class="task-menu" data-action="edit" title="Редактировать">✏️</span>
-        <span class="task-menu" data-action="delete" title="Удалить"></span>
+        <span class="task-menu" data-action="delete" title="Удалить">🗑️</span>
       </div>
     </div>
   `;
@@ -191,6 +216,7 @@ function createTaskCard(task) {
     e.dataTransfer.effectAllowed = "move";
     setTimeout(() => (card.style.opacity = "0.5"), 0);
   });
+
   card.addEventListener("dragend", () => {
     card.style.opacity = "1";
   });
@@ -216,14 +242,11 @@ function setupDragAndDrop() {
     column.addEventListener("dragleave", () => {
       column.style.backgroundColor = "";
     });
-
     column.addEventListener("drop", async (e) => {
       e.preventDefault();
       column.style.backgroundColor = "";
-
       const taskId = Number(e.dataTransfer.getData("text/plain"));
       const newStatus = getStatusFromColumn(column.closest(".column"));
-
       await moveTask(taskId, newStatus);
     });
   });
@@ -260,24 +283,20 @@ async function moveTask(taskId, newStatus) {
       },
       body: JSON.stringify({ status: newStatus }),
     });
-
     if (!res.ok) {
       const err = await res.json();
-      console.error(" Ошибка обновления задачи:", err);
+      console.error("Ошибка обновления задачи:", err);
       alert(err.detail || "Ошибка при перемещении задачи");
       return;
     }
-
     const updatedTask = await res.json();
     console.log("✅ Задача перемещена:", updatedTask);
-
     const tasks = storage.getTasks();
     const idx = tasks.findIndex((t) => t.id === taskId);
     if (idx !== -1) {
       tasks[idx].status = newStatus;
       storage.saveTasks(tasks);
     }
-
     renderTasks(currentBoardId);
   } catch (error) {
     console.error("Move task error:", error);
@@ -287,24 +306,18 @@ async function moveTask(taskId, newStatus) {
 
 async function deleteTask(taskId) {
   if (!confirm("Удалить задачу?")) return;
-
   try {
     const res = await fetch(`${API_URL}/api/tasks/${taskId}`, {
       method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${getToken()}`,
-      },
+      headers: { Authorization: `Bearer ${getToken()}` },
     });
-
     if (!res.ok) {
       const err = await res.json();
       alert(err.detail || "Ошибка при удалении");
       return;
     }
-
     const tasks = storage.getTasks().filter((t) => t.id !== taskId);
     storage.saveTasks(tasks);
-
     renderTasks(currentBoardId);
     showToast("Задача удалена", "success");
   } catch (error) {
@@ -315,6 +328,12 @@ async function deleteTask(taskId) {
 
 // ===== МОДАЛЬНОЕ ОКНО =====
 function openTaskModal(task = null, boardId = null, status = "todo") {
+  // 🔥 ДВОЙНАЯ ПРОВЕРКА: наставник не может создавать задачи
+  if (currentUserRole === "mentor") {
+    showToast("Наставник не может создавать задачи", "error");
+    return;
+  }
+
   const modal = document.getElementById("taskModal");
   const title = document.getElementById("modalTitle");
   const saveBtn = document.querySelector(".btn-save");
@@ -356,32 +375,23 @@ function setupModalHandlers() {
   document
     .getElementById("modalCancel")
     ?.addEventListener("click", closeTaskModal);
-
   document.getElementById("taskModal")?.addEventListener("click", (e) => {
-    if (e.target === e.currentTarget) {
-      closeTaskModal();
-    }
+    if (e.target === e.currentTarget) closeTaskModal();
   });
-
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       const modal = document.getElementById("taskModal");
-      if (modal && modal.classList.contains("active")) {
-        closeTaskModal();
-      }
+      if (modal && modal.classList.contains("active")) closeTaskModal();
     }
   });
-
   document.getElementById("taskForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const editingId = document.getElementById("editingTaskId").value;
     const title = document.getElementById("taskTitle").value.trim();
-
     if (!title) {
       document.getElementById("taskTitle").focus();
       return;
     }
-
     const tagsStr = document.getElementById("taskTags").value.trim();
     const tags = tagsStr
       ? tagsStr
@@ -389,7 +399,6 @@ function setupModalHandlers() {
           .map((t) => t.trim())
           .filter((t) => t)
       : [];
-
     const taskData = {
       title,
       description: document.getElementById("taskDescription").value.trim(),
@@ -399,7 +408,6 @@ function setupModalHandlers() {
       board_id: currentBoardId,
       assignee_id: null,
     };
-
     try {
       if (editingId) {
         const res = await fetch(`${API_URL}/api/tasks/${editingId}`, {
@@ -410,16 +418,13 @@ function setupModalHandlers() {
           },
           body: JSON.stringify(taskData),
         });
-
         if (!res.ok) {
           const err = await res.json();
           alert(err.detail || "Ошибка при сохранении");
           return;
         }
-
         const updatedTask = await res.json();
         console.log("✅ Задача обновлена:", updatedTask);
-
         const tasks = storage.getTasks();
         const idx = tasks.findIndex((t) => t.id === Number(editingId));
         if (idx !== -1) {
@@ -440,16 +445,13 @@ function setupModalHandlers() {
           },
           body: JSON.stringify(taskData),
         });
-
         if (!res.ok) {
           const err = await res.json();
           alert(err.detail || "Ошибка при создании");
           return;
         }
-
         const newTask = await res.json();
         console.log("✅ Задача создана:", newTask);
-
         const tasks = storage.getTasks();
         tasks.push({
           id: newTask.id,
@@ -471,7 +473,6 @@ function setupModalHandlers() {
         });
         storage.saveTasks(tasks);
       }
-
       closeTaskModal();
       renderTasks(currentBoardId);
       showToast(editingId ? "Задача обновлена" : "Задача создана", "success");
@@ -495,16 +496,11 @@ function updateCounters(boardId) {
   ).length;
 }
 
-// ===== TOAST =====
 function showToast(message, type = "info") {
   const toast = document.createElement("div");
   toast.className = `toast toast-${type}`;
   toast.textContent = message;
-  toast.style.cssText = `position: fixed; bottom: 2rem; right: 2rem; padding: 1rem 1.5rem; background: ${
-    type === "success"
-      ? "var(--status-green, #22c55e)"
-      : "var(--accent-blue, #3b82f6)"
-  }; color: white; border-radius: var(--radius-md, 8px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10000; animation: slideIn 0.3s ease;`;
+  toast.style.cssText = `position: fixed; bottom: 2rem; right: 2rem; padding: 1rem 1.5rem; background: ${type === "success" ? "var(--status-green, #22c55e)" : "var(--accent-blue, #3b82f6)"}; color: white; border-radius: var(--radius-md, 8px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10000; animation: slideIn 0.3s ease;`;
   document.body.appendChild(toast);
   setTimeout(() => {
     toast.style.animation = "slideOut 0.3s ease";
